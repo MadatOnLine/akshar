@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akshar — Social Media MVP</title>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f5; color: #1a1a1a; }
+    
+    /* Layout */
+    .app { max-width: 480px; margin: 0 auto; min-height: 100vh; background: #fff; position: relative; }
+    .header { background: #6200EE; color: #fff; padding: 16px 20px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header .badge { background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px; font-size: 12px; }
+    
+    /* Tabs */
+    .tabs { display: flex; border-bottom: 1px solid #e0e0e0; background: #fff; position: sticky; top: 56px; z-index: 9; }
+    .tab { flex: 1; padding: 12px; text-align: center; cursor: pointer; font-weight: 500; color: #666; border-bottom: 2px solid transparent; transition: all 0.2s; }
+    .tab.active { color: #6200EE; border-bottom-color: #6200EE; }
+    
+    /* Screens */
+    .screen { display: none; padding: 16px; min-height: calc(100vh - 108px); }
+    .screen.active { display: block; }
+    
+    /* Enrollment */
+    .enroll-container { text-align: center; padding: 40px 20px; }
+    .enroll-container h2 { font-size: 24px; margin-bottom: 8px; }
+    .enroll-container p { color: #666; margin-bottom: 32px; }
+    .logo { font-size: 48px; margin-bottom: 16px; }
+    input, select { width: 100%; padding: 14px 16px; border: 1px solid #ddd; border-radius: 12px; font-size: 16px; margin-bottom: 12px; outline: none; }
+    input:focus { border-color: #6200EE; }
+    .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-size: 16px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .btn-primary { background: #6200EE; color: #fff; }
+    .btn-primary:hover { background: #5000d0; }
+    .btn-secondary { background: #f0f0f0; color: #333; margin-top: 8px; }
+    .btn-danger { background: #F44336; color: #fff; }
+    
+    /* Chat */
+    .chat-messages { height: calc(100vh - 240px); overflow-y: auto; padding-bottom: 16px; }
+    .message { margin-bottom: 12px; display: flex; flex-direction: column; }
+    .message.own { align-items: flex-end; }
+    .message.other { align-items: flex-start; }
+    .message .sender { font-size: 12px; color: #666; margin-bottom: 2px; display: flex; align-items: center; gap: 6px; }
+    .message .bubble { padding: 10px 14px; border-radius: 16px; max-width: 80%; word-wrap: break-word; }
+    .message.own .bubble { background: #6200EE; color: #fff; border-bottom-right-radius: 4px; }
+    .message.other .bubble { background: #f0f0f0; color: #1a1a1a; border-bottom-left-radius: 4px; }
+    .message .meta { font-size: 10px; color: #999; margin-top: 2px; display: flex; gap: 6px; align-items: center; }
+    .chat-input { display: flex; gap: 8px; padding: 12px 0; position: sticky; bottom: 0; background: #fff; border-top: 1px solid #e0e0e0; }
+    .chat-input input { flex: 1; border-radius: 20px; }
+    .chat-input .btn { width: 44px; height: 44px; border-radius: 22px; padding: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    
+    /* Trust Badge */
+    .trust-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 600; color: #fff; }
+    .trust-badge.colony { background: #4CAF50; }
+    .trust-badge.drone { background: #2196F3; }
+    .trust-badge.larva { background: #FF9800; }
+    .trust-badge.suspect { background: #F44336; }
+    
+    /* Feed */
+    .feed-post { background: #fff; border: 1px solid #eee; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+    .feed-post .post-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .feed-post .post-header .name { font-weight: 600; }
+    .feed-post .content { font-size: 16px; line-height: 1.5; margin-bottom: 12px; }
+    .feed-post .reactions { display: flex; gap: 12px; }
+    .feed-post .reactions button { background: #f5f5f5; border: none; padding: 6px 12px; border-radius: 16px; cursor: pointer; font-size: 14px; }
+    .feed-post .reactions button:hover { background: #e8e8e8; }
+    
+    /* Profile */
+    .profile-card { text-align: center; padding: 32px 20px; }
+    .avatar { width: 80px; height: 80px; border-radius: 50%; background: #6200EE; color: #fff; font-size: 32px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
+    .trust-score { font-size: 28px; font-weight: 700; margin: 8px 0; }
+    .progress-bar { height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 12px 0; }
+    .progress-fill { height: 100%; background: #6200EE; border-radius: 4px; transition: width 0.3s; }
+    
+    /* Status */
+    .status-bar { background: #E8F5E9; color: #2E7D32; padding: 8px 16px; font-size: 12px; text-align: center; }
+    .status-bar.error { background: #FFEBEE; color: #C62828; }
+    .status-bar.warning { background: #FFF3E0; color: #E65100; }
+    
+    /* Liveness */
+    .liveness-overlay { background: rgba(0,0,0,0.8); padding: 32px; border-radius: 16px; text-align: center; margin: 20px 0; }
+    .liveness-overlay .emoji { font-size: 48px; margin-bottom: 12px; }
+    .liveness-overlay .instruction { color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 16px; }
+    .liveness-overlay .timer { color: #fff; font-size: 24px; font-weight: 700; }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Status bar -->
+    <div id="status-bar" class="status-bar hidden"></div>
+    
+    <!-- Header -->
+    <div class="header">
+      <h1>अक्षर Akshar</h1>
+      <span id="user-badge" class="badge hidden"></span>
+    </div>
+    
+    <!-- Enrollment Screen -->
+    <div id="screen-enroll" class="screen active">
+      <div class="enroll-container">
+        <div class="logo">🔐</div>
+        <h2>Welcome to Akshar</h2>
+        <p>Prove you're human with a quick face check</p>
+        <input type="text" id="enroll-name" placeholder="Your name" maxlength="50" data-testid="enrollment-name-input">
+        <button class="btn btn-primary" onclick="startEnrollment()" data-testid="enrollment-capture-button">Start Face Enrollment</button>
+        
+        <!-- Liveness challenge (shown after enrollment starts) -->
+        <div id="liveness-section" class="hidden">
+          <div class="liveness-overlay">
+            <div class="emoji" id="liveness-emoji">😌</div>
+            <div class="instruction" id="liveness-instruction">Please blink slowly</div>
+            <div class="timer" id="liveness-timer">15s</div>
+          </div>
+          <button class="btn btn-primary" onclick="completeLiveness()" data-testid="enrollment-done-button">I Did It ✓</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Tabs (shown when logged in) -->
+    <div id="nav-tabs" class="tabs hidden">
+      <div class="tab active" onclick="switchTab('chat')" data-testid="tab-chat">💬 Chat</div>
+      <div class="tab" onclick="switchTab('feed')" data-testid="tab-feed">📢 Feed</div>
+      <div class="tab" onclick="switchTab('profile')" data-testid="tab-profile">👤 Profile</div>
+    </div>
+    
+    <!-- Chat Screen -->
+    <div id="screen-chat" class="screen">
+      <div class="chat-messages" id="chat-messages"></div>
+      <div class="chat-input">
+        <input type="text" id="chat-input" placeholder="Type a message..." maxlength="5000" data-testid="chat-input" onkeydown="handleChatKeydown(event)">
+        <button class="btn btn-primary" onclick="sendMessage()" data-testid="chat-send-button">↑</button>
+      </div>
+    </div>
+    
+    <!-- Feed Screen -->
+    <div id="screen-feed" class="screen">
+      <div id="feed-posts"></div>
+      <div style="text-align:center; padding:20px; color:#999;" id="feed-empty">
+        No posts yet. Share something from chat!
+      </div>
+    </div>
+    
+    <!-- Profile Screen -->
+    <div id="screen-profile" class="screen">
+      <div class="profile-card">
+        <div class="avatar" id="profile-avatar">?</div>
+        <h2 id="profile-name">—</h2>
+        <div id="profile-tier"></div>
+        <div class="trust-score" id="profile-trust">0 / 10,000</div>
+        <div class="progress-bar"><div class="progress-fill" id="profile-progress" style="width:0%"></div></div>
+        <p style="color:#666; margin-top:16px;" id="profile-status"></p>
+        <button class="btn btn-danger" onclick="logout()" style="margin-top:32px;" data-testid="profile-logout-button">Logout</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- State ---
+    let token = null;
+    let userId = null;
+    let userName = null;
+    let attemptId = null;
+    let challengeId = null;
+    let typingStart = 0;
+    let socket = null;
+    
+    const AUTH_URL = 'http://127.0.0.1:8001';
+    const AI_URL = 'http://127.0.0.1:8002';
+    const MESH_URL = 'http://127.0.0.1:8003';
+    
+    const ACTIONS = { blink: ['😌', 'Please blink slowly'], turn_left: ['👈', 'Turn your head left'], turn_right: ['👉', 'Turn your head right'], smile: ['😊', 'Please smile'] };
+    const TIER_CLASS = { 'Trusted Human': 'colony', 'Likely Human': 'drone', 'Provisional': 'larva', 'Low Trust / Suspect': 'suspect' };
+    
+    // --- Enrollment ---
+    async function startEnrollment() {
+      const name = document.getElementById('enroll-name').value.trim();
+      if (!name) { showStatus('Please enter your name', 'error'); return; }
+      
+      try {
+        showStatus('Starting enrollment...', '');
+        const resp = await fetch(`${AUTH_URL}/auth/enroll`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, deviceId: 'web-' + Date.now() })
+        });
+        const data = await resp.json();
+        if (!data.ok) throw new Error(data.detail || 'Enrollment failed');
+        
+        attemptId = data.attemptId;
+        challengeId = data.challenge.challengeId;
+        const action = data.challenge.action;
+        
+        document.getElementById('liveness-emoji').textContent = ACTIONS[action][0];
+        document.getElementById('liveness-instruction').textContent = ACTIONS[action][1];
+        document.getElementById('liveness-section').classList.remove('hidden');
+        showStatus(`Challenge: ${ACTIONS[action][1]}`, 'warning');
+        
+        // Timer countdown
+        let remaining = data.challenge.timeout;
+        document.getElementById('liveness-timer').textContent = remaining + 's';
+        const timer = setInterval(() => {
+          remaining--;
+          document.getElementById('liveness-timer').textContent = remaining + 's';
+          if (remaining <= 0) clearInterval(timer);
+        }, 1000);
+        
+        userName = name;
+      } catch (err) {
+        showStatus(err.message, 'error');
+      }
+    }
+    
+    async function completeLiveness() {
+      try {
+        showStatus('Verifying...', '');
+        const faceHash = Array.from({length:16}, () => Math.floor(Math.random()*16).toString(16)).join('');
+        
+        const resp = await fetch(`${AUTH_URL}/auth/liveness`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ attemptId, challengeId, faceHash })
+        });
+        const data = await resp.json();
+        if (!data.ok || !data.passed) throw new Error(data.detail || 'Liveness failed');
+        
+        token = data.token;
+        userId = data.userId;
+        onLoggedIn();
+      } catch (err) {
+        showStatus(err.message, 'error');
+      }
+    }
+    
+    // --- Logged in ---
+    function onLoggedIn() {
+      document.getElementById('screen-enroll').classList.remove('active');
+      document.getElementById('nav-tabs').classList.remove('hidden');
+      document.getElementById('user-badge').classList.remove('hidden');
+      document.getElementById('user-badge').textContent = userName;
+      switchTab('chat');
+      showStatus(`Welcome, ${userName}! You're in.`, '');
+      loadProfile();
+      connectSocket();
+    }
+    
+    function logout() {
+      token = null; userId = null; userName = null;
+      if (socket) socket.disconnect();
+      document.getElementById('screen-enroll').classList.add('active');
+      document.getElementById('nav-tabs').classList.add('hidden');
+      document.getElementById('user-badge').classList.add('hidden');
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen-enroll').classList.add('active');
+      document.getElementById('liveness-section').classList.add('hidden');
+      showStatus('Logged out', '');
+    }
+    
+    // --- Tabs ---
+    function switchTab(tab) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
+      document.getElementById(`screen-${tab}`).classList.add('active');
+      if (tab === 'feed') loadFeed();
+      if (tab === 'profile') loadProfile();
+    }
+    
+    // --- Chat ---
+    function connectSocket() {
+      socket = io(MESH_URL, { auth: { token } });
+      socket.on('connect', () => showStatus('Connected to mesh', ''));
+      socket.on('new-message', (msg) => {
+        addMessage(msg.fromNode, msg.classification?.verdict || 'Unknown', '(encrypted)', msg.ts);
+      });
+      socket.on('disconnect', () => showStatus('Disconnected', 'warning'));
+    }
+    
+    function handleChatKeydown(e) {
+      if (typingStart === 0) typingStart = Date.now();
+      if (e.key === 'Enter') sendMessage();
+    }
+    
+    async function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text) return;
+      
+      const typingMs = typingStart > 0 ? Date.now() - typingStart : 2000;
+      typingStart = 0;
+      input.value = '';
+      
+      // Show locally
+      addMessage(userName, '', text, Date.now(), true);
+      
+      // Classify via AI (for demo — in production this goes through mesh)
+      try {
+        const resp = await fetch(`${AI_URL}/ai/classify-message`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Service-Key': 'akshar-internal-dev-key' },
+          body: JSON.stringify({ room: 'web-demo', sender: userId, text, typingMs })
+        });
+        const data = await resp.json();
+        updateLastMessageClassification(data.verdict, data.humanness, data.trust, data.pAI);
+      } catch {}
+    }
+    
+    function addMessage(sender, verdict, text, ts, isOwn = false) {
+      const container = document.getElementById('chat-messages');
+      const tierClass = verdict === 'Human' ? 'drone' : verdict === 'Bot' ? 'suspect' : 'larva';
+      const html = `
+        <div class="message ${isOwn ? 'own' : 'other'}">
+          <div class="sender">${sender} ${verdict ? `<span class="trust-badge ${tierClass}">${verdict}</span>` : ''}</div>
+          <div class="bubble">${escapeHtml(text)}</div>
+          <div class="meta">${new Date(ts).toLocaleTimeString()}</div>
+        </div>
+      `;
+      container.insertAdjacentHTML('beforeend', html);
+      container.scrollTop = container.scrollHeight;
+    }
+    
+    function updateLastMessageClassification(verdict, humanness, trust, pAI) {
+      const msgs = document.querySelectorAll('#chat-messages .message.own');
+      const last = msgs[msgs.length - 1];
+      if (!last) return;
+      const meta = last.querySelector('.meta');
+      const tierClass = verdict === 'Human' ? 'drone' : 'suspect';
+      meta.innerHTML += ` | <span class="trust-badge ${tierClass}">${verdict}</span> (${Math.round(humanness*100)}%) | Trust: ${trust}`;
+      if (pAI > 0) meta.innerHTML += ` | P(AI): ${Math.round(pAI*100)}%`;
+    }
+    
+    // --- Feed ---
+    async function loadFeed() {
+      try {
+        const resp = await fetch(`${MESH_URL}/mesh/feed`, { headers: { Authorization: `Bearer ${token}` } });
+        const data = await resp.json();
+        const container = document.getElementById('feed-posts');
+        const empty = document.getElementById('feed-empty');
+        
+        if (!data.posts || data.posts.length === 0) {
+          container.innerHTML = '';
+          empty.classList.remove('hidden');
+          return;
+        }
+        
+        empty.classList.add('hidden');
+        container.innerHTML = data.posts.map(p => `
+          <div class="feed-post">
+            <div class="post-header">
+              <span class="name">${p.sharerId}</span>
+              <span class="trust-badge larva">Shared</span>
+            </div>
+            ${p.originalAuthorId !== p.sharerId ? `<div style="font-size:12px;color:#666;margin-bottom:8px;">Originally by @${p.originalAuthorId}</div>` : ''}
+            <div class="content">${escapeHtml(p.content)}</div>
+            <div class="reactions">
+              <button onclick="reactPost('${p.postId}','like')">👍 ${p.likes}</button>
+              <button onclick="reactPost('${p.postId}','dislike')">👎 ${p.dislikes}</button>
+              <button onclick="reactPost('${p.postId}','share')">🔄 ${p.shares}</button>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        showStatus('Failed to load feed', 'error');
+      }
+    }
+    
+    async function reactPost(postId, type) {
+      try {
+        await fetch(`${MESH_URL}/mesh/feed/${postId}/react`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ type })
+        });
+        loadFeed();
+      } catch {}
+    }
+    
+    async function shareMessage(text) {
+      try {
+        await fetch(`${MESH_URL}/mesh/share`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ groupId: 'web-demo', messageId: 'msg-' + Date.now(), plaintext: text, originalAuthorId: userId })
+        });
+        showStatus('Shared to feed!', '');
+      } catch {}
+    }
+    
+    // --- Profile ---
+    async function loadProfile() {
+      try {
+        const [profileResp, trustResp] = await Promise.all([
+          fetch(`${AUTH_URL}/auth/profile/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${AI_URL}/ai/trust/${userId}`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+        
+        const profile = await profileResp.json();
+        const trust = await trustResp.json();
+        
+        document.getElementById('profile-avatar').textContent = (profile.name || '?')[0].toUpperCase();
+        document.getElementById('profile-name').textContent = profile.name || userName;
+        document.getElementById('profile-trust').textContent = `${(trust.trust || 1000).toLocaleString()} / 10,000`;
+        document.getElementById('profile-progress').style.width = `${((trust.trust || 1000) / 10000) * 100}%`;
+        
+        const tier = trust.tier || 'Provisional';
+        const tierClass = TIER_CLASS[tier] || 'larva';
+        document.getElementById('profile-tier').innerHTML = `<span class="trust-badge ${tierClass}">${tier}</span>`;
+        document.getElementById('profile-status').textContent = `Member since ${new Date(profile.createdAt).toLocaleDateString()}`;
+      } catch {}
+    }
+    
+    // --- Utils ---
+    function showStatus(msg, type) {
+      const bar = document.getElementById('status-bar');
+      bar.textContent = msg;
+      bar.className = 'status-bar' + (type ? ' ' + type : '');
+      bar.classList.remove('hidden');
+      if (!type || type === '') setTimeout(() => bar.classList.add('hidden'), 3000);
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+</html>

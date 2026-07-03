@@ -1,0 +1,51 @@
+/**
+ * Feed REST endpoints — Layer 2 public sharing.
+ */
+import { Router } from 'express';
+import { requireAuth } from '../middleware/auth.js';
+import * as feedService from '../services/feed.js';
+import * as groupService from '../services/groups.js';
+export const feedRouter = Router();
+feedRouter.post('/mesh/share', requireAuth, async (req, res) => {
+    const userId = req.userId;
+    const { groupId, messageId, plaintext, originalAuthorId } = req.body;
+    if (!groupId || !messageId || !plaintext) {
+        res.status(400).json({ ok: false, error: 'groupId, messageId, and plaintext are required' });
+        return;
+    }
+    // Check membership
+    const isMember = await groupService.isMember(groupId, userId);
+    if (!isMember) {
+        res.status(403).json({ ok: false, error: 'Not a member of this group' });
+        return;
+    }
+    // Check not sealed
+    const group = await groupService.getGroup(groupId);
+    if (group?.sealed) {
+        res.status(403).json({ ok: false, error: 'This group does not allow sharing' });
+        return;
+    }
+    const post = await feedService.shareToFeed(userId, originalAuthorId || userId, groupId, messageId, plaintext);
+    res.status(201).json({ ok: true, post });
+});
+feedRouter.get('/mesh/feed', requireAuth, async (req, res) => {
+    const limit = parseInt(req.query.limit) || undefined;
+    const skip = parseInt(req.query.skip) || undefined;
+    const posts = await feedService.getFeed(limit, skip);
+    res.json({ ok: true, posts });
+});
+feedRouter.post('/mesh/feed/:postId/react', requireAuth, async (req, res) => {
+    const userId = req.userId;
+    const { type } = req.body;
+    if (!['like', 'dislike', 'share'].includes(type)) {
+        res.status(400).json({ ok: false, error: 'type must be like, dislike, or share' });
+        return;
+    }
+    const success = await feedService.reactToPost(req.params.postId, userId, type);
+    if (!success) {
+        res.status(409).json({ ok: false, error: 'Already reacted' });
+        return;
+    }
+    res.json({ ok: true });
+});
+//# sourceMappingURL=feed.js.map

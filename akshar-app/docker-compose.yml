@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  couchdb:
+    image: couchdb:3
+    environment:
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin
+    ports:
+      - "5984:5984"
+    volumes:
+      - couchdb_data:/opt/couchdb/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5984"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  auth:
+    build: ./packages/auth
+    ports:
+      - "8001:8001"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-akshar-dev-secret-change-in-production-32ch}
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin
+    depends_on:
+      couchdb:
+        condition: service_healthy
+
+  ai:
+    build: ./packages/ai
+    ports:
+      - "8002:8002"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-akshar-dev-secret-change-in-production-32ch}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-akshar-internal-dev-key}
+      COUCHDB_URL: http://couchdb:5984
+      COUCHDB_USER: admin
+      COUCHDB_PASSWORD: admin
+    depends_on:
+      couchdb:
+        condition: service_healthy
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+
+  mesh:
+    build: ./packages/mesh
+    ports:
+      - "8003:8003"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:-akshar-dev-secret-change-in-production-32ch}
+      SERVICE_API_KEY: ${SERVICE_API_KEY:-akshar-internal-dev-key}
+      COUCHDB_URL: http://admin:admin@couchdb:5984
+      AI_SERVICE_URL: http://ai:8002
+      AUTH_SERVICE_URL: http://auth:8001
+    depends_on:
+      couchdb:
+        condition: service_healthy
+      ai:
+        condition: service_started
+
+volumes:
+  couchdb_data:
+  huggingface_cache:
