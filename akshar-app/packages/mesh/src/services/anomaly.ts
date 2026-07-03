@@ -4,11 +4,11 @@
 import { Server as SocketServer } from 'socket.io';
 import { config } from '../config.js';
 import * as messaging from './messaging.js';
-import { initiateRecovery } from './recovery.js';
+import { initiateRecovery, replicateVault } from './recovery.js';
 
 let knownMyWorkIds = new Set<string>();
 let knownLockerIds = new Set<string>();
-let replicationFactor = config.initialReplicationFactor;
+let replicationFactor: number = config.initialReplicationFactor;
 let timer: ReturnType<typeof setInterval> | null = null;
 let _io: SocketServer | null = null;
 let _userId: string = '';
@@ -99,8 +99,17 @@ async function pollForAnomalies(): Promise<void> {
     // Remove from known set to prevent re-firing
     for (const id of missingMyWork) knownMyWorkIds.delete(id);
 
-    // Initiate recovery
+    // Initiate recovery, then spread vault copies to all peers
     await initiateRecovery(missingMyWork, 'mywork', _userId, _io!);
+
+    // After recovery, spread entire vault across peer lockers (exponential replication)
+    setTimeout(async () => {
+      try {
+        await replicateVault(_userId, _io!);
+      } catch (err: any) {
+        console.error('[Anomaly] Vault replication failed:', err.message);
+      }
+    }, 5000);
   }
 
   // Check Locker
