@@ -160,6 +160,63 @@ async def validate_liveness_and_complete(
     }
 
 
+async def direct_enrollment(name: str, device_id: str, face_hash: str) -> dict:
+    """Direct enrollment — client has already performed hybrid liveness locally.
+
+    Matches the research Proof-of-Human flow: the client runs passive + active
+    motion detection before computing the face hash, then sends everything in
+    one call. No server-side liveness challenge needed.
+    """
+    # Check no existing user with same device
+    existing = await db.find(
+        {"type": "user", "deviceId": device_id, "status": "active"}, limit=1
+    )
+    if existing:
+        raise ValueError("Device already has an enrolled account")
+
+    # Check face hash uniqueness (Hamming distance)
+    all_users = await db.find({"type": "user", "status": "active"}, limit=1000)
+    for user_doc in all_users:
+        existing_hash = user_doc.get("faceHash", "")
+        if _hamming_distance(face_hash, existing_hash) <= FACE_MATCH_THRESHOLD:
+            raise ValueError("Face already enrolled")
+
+    # Create user
+    user_id = secrets.token_hex(16)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    user_doc = {
+        "userId": user_id,
+        "name": name,
+        "faceHash": face_hash,
+        "deviceId": device_id,
+        "createdAt": now_iso,
+        "updatedAt": now_iso,
+        "status": UserStatus.active.value,
+        "tier": UserTier.larva.value,
+        "type": "user",
+    }
+    await db.put(f"user:{user_id}", user_doc)
+
+    # Create initial trust state
+    trust_doc = {
+        "userId": user_id,
+        "evidence": 5.0,  # evidence_for_trust(1000) ≈ 5.0
+        "history": [TIER0_BASE_TRUST],
+        "lastAnalysis": now_iso,
+        "type": "trust",
+    }
+    await db.put(f"trust:{user_id}", trust_doc)
+
+    # Issue session
+    session_data = await session_service.issue_session(user_id, device_id)
+
+    return {
+        "userId": user_id,
+        "token": session_data["token"],
+        "refreshToken": session_data["refreshToken"],
+    }
+
+
 async def face_login(face_hash: str, device_id: str, client_ip: str) -> dict:
     """Authenticate via face hash comparison."""
     # Rate limit check

@@ -18,6 +18,27 @@ class EnrollRequest(BaseModel):
         return v.strip()
 
 
+class DirectEnrollRequest(BaseModel):
+    """Direct enrollment — client already performed hybrid liveness locally."""
+    name: str = Field(..., min_length=1, max_length=50)
+    deviceId: str = Field(..., min_length=1, max_length=256)
+    faceHash: str = Field(..., min_length=16, max_length=16)
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not re.match(r"^[a-zA-Z0-9 \-]+$", v):
+            raise ValueError("Name may only contain letters, numbers, spaces, and hyphens")
+        return v.strip()
+
+    @field_validator("faceHash")
+    @classmethod
+    def validate_face_hash(cls, v: str) -> str:
+        if not re.match(r"^[0-9a-f]{16}$", v.lower()):
+            raise ValueError("faceHash must be exactly 16 lowercase hex characters")
+        return v.lower()
+
+
 class LivenessRequest(BaseModel):
     attemptId: str = Field(..., min_length=1)
     challengeId: str = Field(..., min_length=1)

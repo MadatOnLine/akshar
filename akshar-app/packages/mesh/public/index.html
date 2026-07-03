@@ -84,6 +84,26 @@
     .liveness-overlay .emoji { font-size: 48px; margin-bottom: 12px; }
     .liveness-overlay .instruction { color: #fff; font-size: 18px; font-weight: 600; margin-bottom: 16px; }
     .liveness-overlay .timer { color: #fff; font-size: 24px; font-weight: 700; }
+
+    /* Camera (from research) */
+    .cam-shell { position: relative; width: 100%; aspect-ratio: 4/3; border-radius: 14px; overflow: hidden; background: #05080d; border: 1px solid #283347; margin: 16px 0; }
+    .cam-shell video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+    .cam-shell canvas { display: none; }
+    .live-badge { position: absolute; left: 10px; bottom: 10px; font-size: 12px; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,0.55); color: #999; border: 1px solid #444; z-index: 3; }
+    .live-badge.on { color: #43d17a; border-color: #43d17a; }
+    .challenge-overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; z-index: 2; background: rgba(0,0,0,0.7); }
+    .challenge-overlay .challenge-text { font-size: 22px; font-weight: 800; color: #fff; text-align: center; text-shadow: 0 2px 12px rgba(0,0,0,0.8); }
+    .challenge-overlay .challenge-timer { font-size: 16px; font-weight: 700; color: #58e1c0; background: rgba(0,0,0,0.5); border-radius: 999px; padding: 4px 14px; }
+    .motion-meter { position: absolute; left: 0; right: 0; bottom: 0; height: 6px; background: rgba(0,0,0,0.5); z-index: 3; }
+    .motion-meter .motion-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #58e1c0, #6d8cff); transition: width 0.12s linear; }
+    .liveness-steps { list-style: none; padding: 0; margin: 8px 0; }
+    .liveness-steps li { display: flex; align-items: center; gap: 10px; padding: 8px 12px; margin: 4px 0; border: 1px solid #ddd; border-radius: 10px; font-size: 14px; color: #666; background: #f9f9f9; }
+    .liveness-steps li .dot { width: 12px; height: 12px; border-radius: 50%; background: #ccc; flex-shrink: 0; }
+    .liveness-steps li.pending .dot { background: #ffc66b; }
+    .liveness-steps li.ok .dot { background: #43d17a; }
+    .liveness-steps li.ok { color: #333; border-color: #43d17a; }
+    .liveness-steps li.fail .dot { background: #ff6b6b; }
+    .liveness-steps li.fail { color: #333; border-color: #ff6b6b; }
     
     .hidden { display: none !important; }
   </style>
@@ -102,21 +122,30 @@
     <!-- Enrollment Screen -->
     <div id="screen-enroll" class="screen active">
       <div class="enroll-container">
-        <div class="logo">🔐</div>
-        <h2>Welcome to Akshar</h2>
-        <p>Prove you're human with a quick face check</p>
-        <input type="text" id="enroll-name" placeholder="Your name" maxlength="50" data-testid="enrollment-name-input">
-        <button class="btn btn-primary" onclick="startEnrollment()" data-testid="enrollment-capture-button">Start Face Enrollment</button>
+        <h2>Sign in with your face</h2>
+        <p>Hybrid liveness — passive motion detection plus an active challenge — then captures and hashes your face in your browser.</p>
         
-        <!-- Liveness challenge (shown after enrollment starts) -->
-        <div id="liveness-section" class="hidden">
-          <div class="liveness-overlay">
-            <div class="emoji" id="liveness-emoji">😌</div>
-            <div class="instruction" id="liveness-instruction">Please blink slowly</div>
-            <div class="timer" id="liveness-timer">15s</div>
+        <!-- Camera (from research login/templates/login.html) -->
+        <div class="cam-shell">
+          <video id="cam" autoplay playsinline muted></video>
+          <canvas id="cam-canvas" width="8" height="8"></canvas>
+          <div id="live-badge" class="live-badge">camera off</div>
+          <div id="challenge-overlay" class="challenge-overlay hidden">
+            <div class="challenge-text" id="challenge-text"></div>
+            <div class="challenge-timer" id="challenge-timer"></div>
           </div>
-          <button class="btn btn-primary" onclick="completeLiveness()" data-testid="enrollment-done-button">I Did It ✓</button>
+          <div class="motion-meter"><div id="motion-fill" class="motion-fill"></div></div>
         </div>
+        
+        <ul class="liveness-steps">
+          <li id="step-passive"><span class="dot"></span> Passive liveness <small>(live motion present)</small></li>
+          <li id="step-active"><span class="dot"></span> Active challenge <small>(respond on cue)</small></li>
+        </ul>
+        
+        <input type="text" id="enroll-name" placeholder="Display name (e.g. Sidd)" maxlength="50" data-testid="enrollment-name-input">
+        <button class="btn btn-primary" onclick="handleEnroll()" data-testid="enrollment-capture-button">Create account & enroll face</button>
+        <button class="btn btn-secondary" onclick="handleFaceLogin()" data-testid="login-button">Log in with face</button>
+        <p id="enroll-status" style="margin-top:12px; font-size:14px; min-height:20px;"></p>
       </div>
     </div>
     
@@ -163,77 +192,206 @@
     let token = null;
     let userId = null;
     let userName = null;
-    let attemptId = null;
-    let challengeId = null;
+    let deviceId = 'web-' + Date.now();
     let typingStart = 0;
     let socket = null;
+    let cameraReady = false;
     
     const AUTH_URL = 'http://127.0.0.1:8001';
     const AI_URL = 'http://127.0.0.1:8002';
     const MESH_URL = 'http://127.0.0.1:8003';
     
-    const ACTIONS = { blink: ['😌', 'Please blink slowly'], turn_left: ['👈', 'Turn your head left'], turn_right: ['👉', 'Turn your head right'], smile: ['😊', 'Please smile'] };
     const TIER_CLASS = { 'Trusted Human': 'colony', 'Likely Human': 'drone', 'Provisional': 'larva', 'Low Trust / Suspect': 'suspect' };
     
-    // --- Enrollment ---
-    async function startEnrollment() {
-      const name = document.getElementById('enroll-name').value.trim();
-      if (!name) { showStatus('Please enter your name', 'error'); return; }
-      
+    // ===================== Face login (ported from research app.js) =====================
+    
+    const video = document.getElementById('cam');
+    const canvas = document.getElementById('cam-canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const mCanvas = document.createElement('canvas');
+    mCanvas.width = 32; mCanvas.height = 32;
+    const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+
+    // Thresholds from research
+    const PASSIVE_MIN = 1.0;
+    const ACTIVE_MIN = 3.5;
+    const CHALLENGES = [
+      'Slowly turn your head left, then right',
+      'Nod your head up and down',
+      'Lean a little closer, then back',
+      'Tilt your head side to side',
+    ];
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function motionFrame() {
+      if (!cameraReady || video.videoWidth === 0) return null;
+      mCtx.drawImage(video, 0, 0, 32, 32);
+      const px = mCtx.getImageData(0, 0, 32, 32).data;
+      const g = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) {
+        g[i] = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
+      }
+      return g;
+    }
+
+    function meanAbsDiff(a, b) {
+      let s = 0;
+      for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+      return s / a.length;
+    }
+
+    function captureHash() {
+      if (!cameraReady || video.videoWidth === 0) return null;
+      ctx.drawImage(video, 0, 0, 8, 8);
+      const px = ctx.getImageData(0, 0, 8, 8).data;
+      const lum = [];
+      let sum = 0;
+      for (let i = 0; i < 64; i++) {
+        const v = 0.299 * px[i*4] + 0.587 * px[i*4+1] + 0.114 * px[i*4+2];
+        lum.push(v); sum += v;
+      }
+      const avg = sum / 64;
+      let hex = '';
+      for (let nib = 0; nib < 16; nib++) {
+        let bits = 0;
+        for (let b = 0; b < 4; b++) bits = (bits << 1) | (lum[nib*4+b] > avg ? 1 : 0);
+        hex += bits.toString(16);
+      }
+      return hex;
+    }
+
+    function setStep(id, state) {
+      const el = document.getElementById(id);
+      if (el) el.className = state;
+    }
+    function updateMeter(d) {
+      const fill = document.getElementById('motion-fill');
+      if (fill) fill.style.width = Math.min(100, d * 8).toFixed(0) + '%';
+    }
+    function setEnrollStatus(msg, kind) {
+      const el = document.getElementById('enroll-status');
+      el.textContent = msg;
+      el.style.color = kind === 'bad' ? '#F44336' : kind === 'good' ? '#4CAF50' : '#666';
+    }
+
+    async function startCamera() {
       try {
-        showStatus('Starting enrollment...', '');
-        const resp = await fetch(`${AUTH_URL}/auth/enroll`, {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240, facingMode: 'user' } });
+        video.srcObject = stream;
+        cameraReady = true;
+        document.getElementById('live-badge').textContent = 'camera live';
+        document.getElementById('live-badge').classList.add('on');
+      } catch (err) {
+        document.getElementById('live-badge').textContent = 'no camera';
+        setEnrollStatus('Could not access webcam: ' + err.message, 'bad');
+      }
+    }
+
+    async function runHybridLiveness() {
+      if (!cameraReady) { setEnrollStatus('Camera is not ready yet.', 'bad'); return null; }
+      setStep('step-passive', 'pending');
+      setStep('step-active', 'pending');
+
+      // PASSIVE: confirm live feed
+      setEnrollStatus('Checking passive liveness — hold still for a moment...', '');
+      let prev = null, passivePeak = 0;
+      for (let i = 0; i < 8; i++) {
+        const g = motionFrame();
+        if (g && prev) { const d = meanAbsDiff(g, prev); passivePeak = Math.max(passivePeak, d); updateMeter(d); }
+        if (g) prev = g;
+        await sleep(130);
+      }
+      if (passivePeak < PASSIVE_MIN) {
+        setStep('step-passive', 'fail');
+        setEnrollStatus('Passive liveness failed — no live motion detected (static image?).', 'bad');
+        return null;
+      }
+      setStep('step-passive', 'ok');
+
+      // ACTIVE: challenge-response
+      const challenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+      setEnrollStatus('Active challenge — follow the on-screen prompt.', '');
+      document.getElementById('challenge-text').textContent = challenge + ' now';
+      document.getElementById('challenge-overlay').classList.remove('hidden');
+      prev = null; let activePeak = 0;
+      const total = 5000, t0 = performance.now();
+      while (performance.now() - t0 < total) {
+        const g = motionFrame();
+        if (g && prev) { const d = meanAbsDiff(g, prev); activePeak = Math.max(activePeak, d); updateMeter(d); }
+        if (g) prev = g;
+        document.getElementById('challenge-timer').textContent = Math.ceil((total - (performance.now() - t0)) / 1000) + 's';
+        if (activePeak >= ACTIVE_MIN) break;
+        await sleep(110);
+      }
+      document.getElementById('challenge-overlay').classList.add('hidden');
+      if (activePeak < ACTIVE_MIN) {
+        setStep('step-active', 'fail');
+        setEnrollStatus("Active challenge failed — we didn't detect your response. Try again.", 'bad');
+        return null;
+      }
+      setStep('step-active', 'ok');
+
+      const hash = captureHash();
+      if (!hash) { setEnrollStatus('Could not read the camera.', 'bad'); return null; }
+      return hash;
+    }
+
+    // --- Enroll button ---
+    async function handleEnroll() {
+      const name = document.getElementById('enroll-name').value.trim();
+      if (!name) { setEnrollStatus('Enter a display name to create your account.', 'bad'); return; }
+      
+      const hash = await runHybridLiveness();
+      if (!hash) return;
+      
+      setEnrollStatus('Liveness passed — enrolling your face...', 'good');
+      try {
+        const resp = await fetch(`${AUTH_URL}/auth/enroll-direct`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, deviceId: 'web-' + Date.now() })
+          body: JSON.stringify({ name, deviceId, faceHash: hash })
         });
         const data = await resp.json();
         if (!data.ok) throw new Error(data.detail || 'Enrollment failed');
         
-        attemptId = data.attemptId;
-        challengeId = data.challenge.challengeId;
-        const action = data.challenge.action;
-        
-        document.getElementById('liveness-emoji').textContent = ACTIONS[action][0];
-        document.getElementById('liveness-instruction').textContent = ACTIONS[action][1];
-        document.getElementById('liveness-section').classList.remove('hidden');
-        showStatus(`Challenge: ${ACTIONS[action][1]}`, 'warning');
-        
-        // Timer countdown
-        let remaining = data.challenge.timeout;
-        document.getElementById('liveness-timer').textContent = remaining + 's';
-        const timer = setInterval(() => {
-          remaining--;
-          document.getElementById('liveness-timer').textContent = remaining + 's';
-          if (remaining <= 0) clearInterval(timer);
-        }, 1000);
-        
+        token = data.token;
+        userId = data.userId;
         userName = name;
+        setEnrollStatus('Face enrolled — signing you in...', 'good');
+        onLoggedIn();
       } catch (err) {
-        showStatus(err.message, 'error');
+        setEnrollStatus(err.message, 'bad');
       }
     }
-    
-    async function completeLiveness() {
+
+    // --- Login button ---
+    async function handleFaceLogin() {
+      const hash = await runHybridLiveness();
+      if (!hash) return;
+      
+      setEnrollStatus('Liveness passed — matching your face...', 'good');
       try {
-        showStatus('Verifying...', '');
-        const faceHash = Array.from({length:16}, () => Math.floor(Math.random()*16).toString(16)).join('');
-        
-        const resp = await fetch(`${AUTH_URL}/auth/liveness`, {
+        const resp = await fetch(`${AUTH_URL}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ attemptId, challengeId, faceHash })
+          body: JSON.stringify({ faceHash: hash, deviceId })
         });
         const data = await resp.json();
-        if (!data.ok || !data.passed) throw new Error(data.detail || 'Liveness failed');
+        if (!data.ok) throw new Error(data.detail || data.error || 'Face not recognised');
         
         token = data.token;
         userId = data.userId;
+        userName = data.name;
+        setEnrollStatus(`Welcome back, ${data.name}!`, 'good');
         onLoggedIn();
       } catch (err) {
-        showStatus(err.message, 'error');
+        setEnrollStatus(err.message, 'bad');
       }
     }
+
+    // Start camera on page load
+    startCamera();
     
     // --- Logged in ---
     function onLoggedIn() {

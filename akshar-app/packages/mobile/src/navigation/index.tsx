@@ -7,7 +7,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useAuth } from '../providers/AuthProvider';
 import { EnrollmentScreen } from '../screens/EnrollmentScreen';
-import { LoginScreen } from '../screens/LoginScreen';
 import { GroupListScreen } from '../screens/GroupListScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { FeedScreen } from '../screens/FeedScreen';
@@ -56,8 +55,7 @@ function MainNavigator() {
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Enrollment" component={EnrollmentScreen} />
-      <AuthStack.Screen name="Login" component={LoginScreen} />
+      <AuthStack.Screen name="FaceLogin" component={EnrollmentScreen} />
     </AuthStack.Navigator>
   );
 }

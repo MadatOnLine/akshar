@@ -41,10 +41,22 @@ export const auth = {
       body: JSON.stringify({ name, deviceId }),
     }),
 
+  enrollDirect: (name: string, deviceId: string, faceHash: string) =>
+    request<any>(`${config.authUrl}/auth/enroll-direct`, {
+      method: 'POST',
+      body: JSON.stringify({ name, deviceId, faceHash }),
+    }),
+
   liveness: (attemptId: string, challengeId: string, faceHash: string) =>
     request<any>(`${config.authUrl}/auth/liveness`, {
       method: 'POST',
       body: JSON.stringify({ attemptId, challengeId, faceHash }),
+    }),
+
+  faceLogin: (faceHash: string, deviceId: string) =>
+    request<any>(`${config.authUrl}/auth/login`, {
+      method: 'POST',
+      body: JSON.stringify({ faceHash, deviceId }),
     }),
 
   biometricLogin: (deviceId: string, biometricToken: string) =>
