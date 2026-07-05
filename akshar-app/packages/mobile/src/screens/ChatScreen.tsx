@@ -25,7 +25,24 @@ export function ChatScreen({ route }: ChatScreenProps) {
   // MVP: simulate receiving messages
   useEffect(() => {
     // In production: connect WebSocket, join room, receive backlog + real-time
+    // socket.on('new-message', ...)
   }, [groupId]);
+
+  // Handle async classification updates (optimistic merge-by-msgId)
+  useEffect(() => {
+    // In production, bind this to: socket.on('message-classified', ...)
+    const handleClassification = (data: { msgId: string; classification: any }) => {
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.msgId === data.msgId
+            ? { ...msg, classification: data.classification }
+            : msg
+        )
+      );
+    };
+
+    // return () => socket.off('message-classified', handleClassification);
+  }, []);
 
   const handleSend = () => {
     if (!inputText.trim() || !keysReady) return;

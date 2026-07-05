@@ -35,14 +35,14 @@ export function trackLocker(msgId: string): void {
  * Seed the known sets from current CouchDB state.
  */
 export async function seedFromDb(userId: string): Promise<void> {
-  const myWork = await messaging.getMyWorkMessages(userId);
-  for (const msg of myWork) {
-    knownMyWorkIds.add(msg.msgId);
+  const myWorkIds = await messaging.getMyWorkMessageIds(userId);
+  for (const id of myWorkIds) {
+    knownMyWorkIds.add(id);
   }
 
-  const locker = await messaging.getLockerMessages(userId);
-  for (const msg of locker) {
-    knownLockerIds.add(msg.msgId);
+  const lockerIds = await messaging.getLockerMessageIds(userId);
+  for (const id of lockerIds) {
+    knownLockerIds.add(id);
   }
 
   console.log(`[Anomaly] Seeded: ${knownMyWorkIds.size} My Work + ${knownLockerIds.size} Locker`);
@@ -79,8 +79,8 @@ export function stopDetector(): void {
  */
 async function pollForAnomalies(): Promise<void> {
   // Check My Work
-  const currentMyWork = await messaging.getMyWorkMessages(_userId);
-  const currentMyWorkIds = new Set(currentMyWork.map(m => m.msgId));
+  const currentMyWorkIdsArr = await messaging.getMyWorkMessageIds(_userId);
+  const currentMyWorkIds = new Set(currentMyWorkIdsArr);
 
   const missingMyWork: string[] = [];
   for (const id of knownMyWorkIds) {
@@ -113,8 +113,8 @@ async function pollForAnomalies(): Promise<void> {
   }
 
   // Check Locker
-  const currentLocker = await messaging.getLockerMessages(_userId);
-  const currentLockerIds = new Set(currentLocker.map(m => m.msgId));
+  const currentLockerIdsArr = await messaging.getLockerMessageIds(_userId);
+  const currentLockerIds = new Set(currentLockerIdsArr);
 
   const missingLocker: string[] = [];
   for (const id of knownLockerIds) {

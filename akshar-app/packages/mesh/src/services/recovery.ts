@@ -44,44 +44,50 @@ export async function initiateRecovery(
 
   console.log(`[Recovery] Initiating ${recoveryType} recovery for ${missingIds.length} msgId(s)`);
 
-  for (const [targetId, targetInfo] of peers) {
-    const otherPeers = peers.filter(([id]) => id !== targetId);
+  const batchSize = 5;
+  for (let i = 0; i < peers.length; i += batchSize) {
+    const batch = peers.slice(i, i + batchSize);
+    await Promise.allSettled(
+      batch.map(async ([targetId, targetInfo]) => {
+        const otherPeers = peers.filter(([id]) => id !== targetId);
 
-    // Build hop list (max 3)
-    const hops: OnionHop[] = [];
-    for (const [, peerInfo] of otherPeers.slice(0, 2)) {
-      hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
-    }
-    hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
+        // Build hop list (max 3)
+        const hops: OnionHop[] = [];
+        for (const [, peerInfo] of otherPeers.slice(0, 2)) {
+          hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
+        }
+        hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
 
-    // Build return path
-    const returnPath = [
-      ...otherPeers.slice(0, 2).map(([id]) => ({ node: id })).reverse(),
-      { node: userId },
-    ];
+        // Build return path
+        const returnPath = [
+          ...otherPeers.slice(0, 2).map(([id]) => ({ node: id })).reverse(),
+          { node: userId },
+        ];
 
-    const payload = {
-      type: 'RECOVERY_REQUEST',
-      missingIds,
-      originNode: userId,
-      returnPath,
-      recoveryType,
-    };
+        const payload = {
+          type: 'RECOVERY_REQUEST',
+          missingIds,
+          originNode: userId,
+          returnPath,
+          recoveryType,
+        };
 
-    try {
-      const onion = wrapOnion(payload, hops.slice(0, 3));
-      const resp = await fetch(`${onion.firstHop}/mesh/relay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
-        signal: AbortSignal.timeout(config.aiTimeout * 2),
-      });
-      if (resp.ok) {
-        console.log(`[Recovery] Onion dispatched to ${targetId}`);
-      }
-    } catch (err: any) {
-      console.error(`[Recovery] Dispatch to ${targetId} failed:`, err.message);
-    }
+        try {
+          const onion = wrapOnion(payload, hops.slice(0, 3));
+          const resp = await fetch(`${onion.firstHop}/mesh/relay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
+            signal: AbortSignal.timeout(config.aiTimeout * 2),
+          });
+          if (resp.ok) {
+            console.log(`[Recovery] Onion dispatched to ${targetId}`);
+          }
+        } catch (err: any) {
+          console.error(`[Recovery] Dispatch to ${targetId} failed:`, err.message);
+        }
+      })
+    );
   }
 }
 
@@ -105,19 +111,22 @@ export async function handleRelay(
     return { status: 'cannot_decrypt' };
   }
 
-  // If there's a next hop, forward
+  // If there's a next hop, forward asynchronously (fire-and-forget)
   if (peeled.next) {
-    try {
-      const resp = await fetch(`${peeled.next}/mesh/relay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ encryptedPayload: peeled.inner }),
-        signal: AbortSignal.timeout(10000),
-      });
-      return await resp.json();
-    } catch (err: any) {
-      return { status: 'forward_failed' };
-    }
+    const nextHopUrl = peeled.next;
+    const nextPayload = peeled.inner;
+    
+    // Fire asynchronously to avoid blocking the Express request pool
+    fetch(`${nextHopUrl}/mesh/relay`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ encryptedPayload: nextPayload }),
+      signal: AbortSignal.timeout(10000),
+    }).catch(err => {
+      console.error(`[Relay] Forwarding to ${nextHopUrl} failed:`, err.message);
+    });
+
+    return { status: 'forwarded_async' };
   }
 
   // Final destination — process payload
@@ -220,43 +229,49 @@ export async function replicateVault(
   console.log(`[Replication] Spreading ${allRows.length} row(s) to ${peers.length} peers (factor: ×${factor})`);
   io.emit('sys', `Spreading ${allRows.length} record(s) across ${peers.length} peer lockers (replication factor: ×${factor})`);
 
-  for (const [targetId, targetInfo] of peers) {
-    const otherPeers = peers.filter(([id]) => id !== targetId);
+  const batchSize = 5;
+  for (let i = 0; i < peers.length; i += batchSize) {
+    const batch = peers.slice(i, i + batchSize);
+    await Promise.allSettled(
+      batch.map(async ([targetId, targetInfo]) => {
+        const otherPeers = peers.filter(([id]) => id !== targetId);
 
-    // Build hop list (max 3 hops via intermediates)
-    const hops: OnionHop[] = [];
-    for (const [, peerInfo] of otherPeers.slice(0, 2)) {
-      hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
-    }
-    hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
+        // Build hop list (max 3 hops via intermediates)
+        const hops: OnionHop[] = [];
+        for (const [, peerInfo] of otherPeers.slice(0, 2)) {
+          hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
+        }
+        hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
 
-    const payload = {
-      type: 'REPLICATE_VAULT',
-      rows: allRows.map(r => ({
-        msgId: r.msgId,
-        fromNode: r.fromNode,
-        toNode: r.toNode,
-        nonce: r.nonce,
-        tag: r.tag,
-        val: r.val,
-        ts: r.ts,
-      })),
-      originNode: userId,
-      replicationFactor: factor,
-    };
+        const payload = {
+          type: 'REPLICATE_VAULT',
+          rows: allRows.map(r => ({
+            msgId: r.msgId,
+            fromNode: r.fromNode,
+            toNode: r.toNode,
+            nonce: r.nonce,
+            tag: r.tag,
+            val: r.val,
+            ts: r.ts,
+          })),
+          originNode: userId,
+          replicationFactor: factor,
+        };
 
-    try {
-      const onion = wrapOnion(payload, hops.slice(0, 3));
-      await fetch(`${onion.firstHop}/mesh/relay`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
-        signal: AbortSignal.timeout(15000),
-      });
-      console.log(`[Replication] Vault replicated to ${targetId}`);
-    } catch (err: any) {
-      console.error(`[Replication] Dispatch to ${targetId} failed:`, err.message);
-    }
+        try {
+          const onion = wrapOnion(payload, hops.slice(0, 3));
+          await fetch(`${onion.firstHop}/mesh/relay`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
+            signal: AbortSignal.timeout(15000),
+          });
+          console.log(`[Replication] Vault replicated to ${targetId}`);
+        } catch (err: any) {
+          console.error(`[Replication] Dispatch to ${targetId} failed:`, err.message);
+        }
+      })
+    );
   }
 
   io.emit('REPLICATION_SPREAD', {

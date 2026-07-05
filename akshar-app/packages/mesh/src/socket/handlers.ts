@@ -60,44 +60,52 @@ export function registerHandlers(io: SocketServer, socket: Socket): void {
     const stored = await messaging.storeMessage(userId, groupId, ciphertext);
     anomaly.trackMyWork(stored.msgId);
 
-    // Call AI classification (non-blocking, fire-and-forget with timeout)
-    let classification: any = { verdict: 'Unknown' };
-    if (plaintext) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), config.aiTimeout);
-        const resp = await fetch(`${config.aiServiceUrl}/ai/classify-message`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Service-Key': config.serviceApiKey,
-          },
-          body: JSON.stringify({
-            room: groupId,
-            sender: userId,
-            text: plaintext,
-            typingMs: typingMs || 0,
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (resp.ok) {
-          classification = await resp.json();
-        }
-      } catch {
-        // AI unavailable — continue without classification (BR-14)
-      }
-    }
-
-    // Broadcast to all group members
+    // Broadcast to all group members instantly
     io.to(`group:${groupId}`).emit('new-message', {
       msgId: stored.msgId,
       fromNode: userId,
       toNode: groupId,
       ciphertext,
       ts: stored.ts,
-      classification,
+      classification: { verdict: plaintext ? 'Pending' : 'Unknown' },
     });
+
+    // Call AI classification (truly asynchronous, non-blocking)
+    if (plaintext) {
+      (async () => {
+        let classification: any = { verdict: 'Unknown' };
+        try {
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), config.aiTimeout);
+          const resp = await fetch(`${config.aiServiceUrl}/ai/classify-message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Service-Key': config.serviceApiKey,
+            },
+            body: JSON.stringify({
+              room: groupId,
+              sender: userId,
+              text: plaintext,
+              typingMs: typingMs || 0,
+            }),
+            signal: controller.signal,
+          });
+          clearTimeout(timeout);
+          if (resp.ok) {
+            classification = await resp.json();
+          }
+        } catch {
+          // AI unavailable — fallback to Unknown
+        }
+
+        // Emit classification resolution update
+        io.to(`group:${groupId}`).emit('message-classified', {
+          msgId: stored.msgId,
+          classification,
+        });
+      })();
+    }
   });
 
   // --- Publish ECDH Public Key ---

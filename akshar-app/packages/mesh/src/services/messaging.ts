@@ -105,7 +105,7 @@ export async function storeBlind(doc: StoredMessage): Promise<boolean> {
       _id: `msg:${doc.msgId}`,
       ...doc,
       type: 'message',
-    });
+    } as any);
     return true;
   } catch (err: any) {
     if (err.statusCode === 409) return false; // already exists
@@ -123,4 +123,35 @@ export async function getByIds(msgIds: string[]): Promise<StoredMessage[]> {
     if (doc) docs.push(doc);
   }
   return docs;
+}
+
+/**
+ * Slim query: Get IDs of all messages where this user is a participant.
+ */
+export async function getMyWorkMessageIds(userId: string): Promise<string[]> {
+  const result = await vaultDb.find({
+    selector: {
+      type: 'message',
+      $or: [{ fromNode: userId }, { toNode: userId }],
+    },
+    fields: ['msgId'],
+    limit: 50000,
+  });
+  return result.docs.map((d: any) => d.msgId);
+}
+
+/**
+ * Slim query: Get IDs of all messages where this user is NOT a participant.
+ */
+export async function getLockerMessageIds(userId: string): Promise<string[]> {
+  const result = await vaultDb.find({
+    selector: {
+      type: 'message',
+      fromNode: { $ne: userId },
+      toNode: { $ne: userId },
+    },
+    fields: ['msgId'],
+    limit: 50000,
+  });
+  return result.docs.map((d: any) => d.msgId);
 }

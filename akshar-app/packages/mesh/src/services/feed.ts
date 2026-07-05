@@ -90,7 +90,7 @@ export async function reactToPost(
     userId,
     type: reactionType,
     ts: Date.now(),
-  });
+  } as any);
 
   // Increment counter on the post
   const post = await safeGet(feedDb, `post:${postId}`);
