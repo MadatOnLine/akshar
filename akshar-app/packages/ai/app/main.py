@@ -42,6 +42,14 @@ async def lifespan(app: FastAPI):
     model_loaded = style_detector.load_models()
     if model_loaded:
         drift_engine.load_anchors()
+        # Warm up the transformers with one throwaway inference. A cold encode can
+        # take several seconds; the mesh aborts slow classify calls, so priming the
+        # models here keeps the first real request fast enough to actually land.
+        try:
+            style_detector.detect_ai_text("warm up the detection pipeline")
+            logger.info("Detection models warmed up")
+        except Exception as e:
+            logger.warning(f"Model warm-up skipped: {e}")
     else:
         logger.warning("StyleDistance model not loaded — AI detection and drift scoring disabled")
 
@@ -72,4 +80,5 @@ async def health():
         "service": "akshar-ai",
         "version": "1.0.0",
         "modelLoaded": style_detector.is_loaded(),
+        "pipelineReady": style_detector.pipeline_ready(),
     }

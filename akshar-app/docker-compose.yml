@@ -55,6 +55,10 @@ services:
       COUCHDB_URL: http://admin:admin@couchdb:5984
       AI_SERVICE_URL: http://ai:8002
       AUTH_SERVICE_URL: http://auth:8001
+      # Budget for the async AI classify call. Two transformer encodes take far
+      # longer than the 500ms default, so the classification was being aborted;
+      # 5s lets the model's result actually reach the client (call is non-blocking).
+      AI_TIMEOUT: ${AI_TIMEOUT:-5000}
     depends_on:
       couchdb:
         condition: service_healthy

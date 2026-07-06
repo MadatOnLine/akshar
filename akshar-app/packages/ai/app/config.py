@@ -53,9 +53,36 @@ WEIGHT_AI_TEXT: float = 0.8
 # --- Tier-1 ---
 TIER1_INTERVAL: int = int(os.getenv("TIER1_INTERVAL", "86400"))
 
-# --- StyleDistance Model ---
+# --- Embedding Models (two separate spaces, never concatenated) ---
+# Style space: captures HOW text is written (768-dim)
 STYLE_MODEL_NAME: str = os.getenv("STYLE_MODEL_NAME", "StyleDistance/styledistance")
-CLASSIFIER_PATH: str = os.getenv("CLASSIFIER_PATH", "ml_models/classifier.pkl")
+# Semantic space: captures WHAT the text is about (384-dim)
+SEMANTIC_MODEL_NAME: str = os.getenv("SEMANTIC_MODEL_NAME", "BAAI/bge-small-en-v1.5")
+
+# --- Two-Step Detection Pipeline Artifacts ---
+# Directory holding the trained classifiers produced by training/train_pipeline.py
+# (or the notebook). If the artifacts are absent the service degrades gracefully.
+ML_MODELS_DIR: str = os.getenv("ML_MODELS_DIR", "ml_models")
+
+# Primary format: a single bundle produced by training — a dict with keys
+# style_rf / sem_rf / meta_lr / style_model / sem_model / threshold. Loaded first;
+# if absent the loader falls back to the individual-file layout below.
+DETECTOR_BUNDLE_PATH: str = os.getenv(
+    "DETECTOR_BUNDLE_PATH", os.path.join(ML_MODELS_DIR, "detector_v1.pkl")
+)
+
+# Step 1 — binary ensemble (Human vs Bot)
+RF_STYLE_PATH: str = os.path.join(ML_MODELS_DIR, "rf_style_binary.pkl")
+RF_SEMANTIC_PATH: str = os.path.join(ML_MODELS_DIR, "rf_semantic_binary.pkl")
+META_LEARNER_PATH: str = os.path.join(ML_MODELS_DIR, "meta_learner.pkl")
+# Step 2 — multiclass bot-family classifier (style space only)
+BOT_FAMILY_PATH: str = os.path.join(ML_MODELS_DIR, "rf_bot_family.pkl")
+LABEL_ENCODER_PATH: str = os.path.join(ML_MODELS_DIR, "label_encoder.pkl")
+MANIFEST_PATH: str = os.path.join(ML_MODELS_DIR, "manifest.json")
+
+# Legacy single-classifier path (kept for backward compatibility; unused by the
+# new pipeline).
+CLASSIFIER_PATH: str = os.getenv("CLASSIFIER_PATH", os.path.join(ML_MODELS_DIR, "classifier.pkl"))
 
 # --- Spam Detection ---
 SPAM_HINTS: tuple = (

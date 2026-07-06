@@ -1,0 +1,17 @@
+{
+  "version": "20260706-225259",
+  "style_model": "StyleDistance/styledistance",
+  "semantic_model": "BAAI/bge-small-en-v1.5",
+  "n_rows": 198,
+  "bot_families": [
+    "ChatGPT",
+    "DeepSeek",
+    "Gemini",
+    "Grok"
+  ],
+  "metrics": {
+    "binary_loo_accuracy": 0.9949,
+    "binary_loo_fp_rate": 0.0076,
+    "bot_family_loo_accuracy": 0.4697
+  }
+}

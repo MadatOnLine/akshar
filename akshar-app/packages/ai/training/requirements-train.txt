@@ -1,0 +1,6 @@
+# Extra dependencies for training the detection pipeline (not needed to run the
+# service). Install alongside the service requirements:
+#   pip install -r requirements.txt -r training/requirements-train.txt
+pandas==2.2.2
+# Below are already in requirements.txt but listed for a standalone training env:
+# sentence-transformers, scikit-learn, joblib, numpy, torch
