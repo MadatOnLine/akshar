@@ -56,15 +56,16 @@ async def test_initiate_enrollment_duplicate_device(mock_db):
 
 @pytest.mark.asyncio
 async def test_validate_liveness_success(mock_db, mock_session):
-    # First initiate
-    result = await auth_service.initiate_enrollment("Charlie", "device-2")
-    attempt_id = result["attemptId"]
-    challenge_id = result["challenge"]["challengeId"]
+    with patch("app.services.trust_store.create_initial_trust", new_callable=AsyncMock):
+        # First initiate
+        result = await auth_service.initiate_enrollment("Charlie", "device-2")
+        attempt_id = result["attemptId"]
+        challenge_id = result["challenge"]["challengeId"]
 
-    # Then validate liveness
-    liveness_result = await auth_service.validate_liveness_and_complete(
-        attempt_id, challenge_id, "abcdef0123456789"
-    )
+        # Then validate liveness
+        liveness_result = await auth_service.validate_liveness_and_complete(
+            attempt_id, challenge_id, "abcdef0123456789"
+        )
     assert liveness_result["passed"] is True
     assert "userId" in liveness_result
     assert "token" in liveness_result
@@ -122,3 +123,31 @@ async def test_validate_liveness_not_found():
         await auth_service.validate_liveness_and_complete(
             "nonexistent", "challenge", "abcdef0123456789"
         )
+
+
+@pytest.mark.asyncio
+async def test_direct_enrollment_success(mock_db, mock_session):
+    with patch("app.services.trust_store.create_initial_trust", new_callable=AsyncMock) as mock_trust:
+        result = await auth_service.direct_enrollment("Alice", "device-direct", "abcdef0123456789")
+
+    assert result["userId"]
+    assert result["token"] == "jwt-token"
+    mock_trust.assert_awaited_once()
+    mock_db.put.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_direct_enrollment_duplicate_device(mock_db):
+    mock_db.find = AsyncMock(return_value=[{"userId": "existing", "deviceId": "device-dup"}])
+    with pytest.raises(ValueError, match="already has an enrolled account"):
+        await auth_service.direct_enrollment("Bob", "device-dup", "abcdef0123456789")
+
+
+@pytest.mark.asyncio
+async def test_direct_enrollment_duplicate_face(mock_db, mock_session):
+    mock_db.find = AsyncMock(side_effect=[
+        [],  # device check
+        [{"faceHash": "abcdef0123456789", "userId": "existing", "type": "user", "status": "active"}],
+    ])
+    with pytest.raises(ValueError, match="Face already enrolled"):
+        await auth_service.direct_enrollment("Carol", "device-new", "abcdef0123456789")

@@ -9,7 +9,6 @@ from app.config import (
     FACE_MATCH_THRESHOLD,
     ENROLLMENT_TIMEOUT,
     LIVENESS_MAX_RETRIES,
-    TIER0_BASE_TRUST,
 )
 from app.db.couch_client import db
 from app.models.entities import (
@@ -19,7 +18,7 @@ from app.models.entities import (
     UserStatus,
     UserTier,
 )
-from app.services import liveness_service, session_service
+from app.services import liveness_service, session_service, trust_store
 from app.services.rate_limiter import rate_limiter
 
 
@@ -135,15 +134,7 @@ async def validate_liveness_and_complete(
     }
     await db.put(f"user:{user_id}", user_doc)
 
-    # Create initial trust state
-    trust_doc = {
-        "userId": user_id,
-        "evidence": 5.0,  # evidence_for_trust(1000) ≈ 5.0
-        "history": [TIER0_BASE_TRUST],
-        "lastAnalysis": now_iso,
-        "type": "trust",
-    }
-    await db.put(f"trust:{user_id}", trust_doc)
+    await trust_store.create_initial_trust(user_id, now_iso)
 
     # Issue session
     session_data = await session_service.issue_session(user_id, attempt.deviceId)
@@ -197,15 +188,7 @@ async def direct_enrollment(name: str, device_id: str, face_hash: str) -> dict:
     }
     await db.put(f"user:{user_id}", user_doc)
 
-    # Create initial trust state
-    trust_doc = {
-        "userId": user_id,
-        "evidence": 5.0,  # evidence_for_trust(1000) ≈ 5.0
-        "history": [TIER0_BASE_TRUST],
-        "lastAnalysis": now_iso,
-        "type": "trust",
-    }
-    await db.put(f"trust:{user_id}", trust_doc)
+    await trust_store.create_initial_trust(user_id, now_iso)
 
     # Issue session
     session_data = await session_service.issue_session(user_id, device_id)

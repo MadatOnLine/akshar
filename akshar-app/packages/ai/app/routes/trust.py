@@ -4,8 +4,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel
 
-from app.config import SERVICE_API_KEY
-from app.services.trust_engine import trust_from_evidence, tier_for, advance_evidence
+from app.config import SERVICE_API_KEY, TIER0_BASE_TRUST
+from app.services.trust_engine import trust_from_evidence, tier_for, advance_evidence, evidence_for_trust
 from app.services.humanity_checks import run_all_checks, combined_humanness
 from app.db.couch_client import db
 
@@ -44,14 +44,20 @@ async def analyze_profile(user_id: str, body: AnalyzeRequest, x_service_key: str
     # Load current trust state
     trust_doc = await db.get(f"trust:{user_id}")
     if not trust_doc:
-        trust_doc = {"userId": user_id, "evidence": 5.0, "history": [1000], "type": "trust"}
+        tier0_evidence = evidence_for_trust(TIER0_BASE_TRUST)
+        trust_doc = {
+            "userId": user_id,
+            "evidence": tier0_evidence,
+            "history": [TIER0_BASE_TRUST],
+            "type": "trust",
+        }
 
     # Run all 8 checks
     checks = run_all_checks(body.userData)
     humanness = combined_humanness(checks)
 
     # Update evidence
-    evidence_before = trust_doc.get("evidence", 5.0)
+    evidence_before = trust_doc.get("evidence", evidence_for_trust(TIER0_BASE_TRUST))
     trust_before = trust_from_evidence(evidence_before)
     evidence_after = advance_evidence(evidence_before, humanness)
     trust_after = trust_from_evidence(evidence_after)
