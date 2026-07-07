@@ -24,4 +24,16 @@ export declare function encrypt(key: Uint8Array, plaintext: string): EncryptedBl
  * @returns Decrypted plaintext string, or null on failure
  */
 export declare function decrypt(key: Uint8Array, nonce: string, tag: string, val: string): string | null;
+/**
+ * Hash Ratchet (Key Derivation Function) for Perfect Forward Secrecy.
+ *
+ * Runs the current AES key through SHA-256 to deterministically generate
+ * the next 32-byte AES key. Because cryptographic hashes are one-way,
+ * it is mathematically impossible to reverse this function. If an attacker
+ * steals the 'currentKey', they cannot derive any past keys.
+ *
+ * @param currentKey - The current 32-byte AES key
+ * @returns The next 32-byte AES key
+ */
+export declare function ratchetKey(currentKey: Uint8Array): Uint8Array;
 //# sourceMappingURL=encryption.d.ts.map

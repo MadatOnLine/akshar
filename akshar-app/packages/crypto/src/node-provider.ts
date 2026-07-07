@@ -18,9 +18,16 @@ export class NodeCryptoProvider implements CryptoProvider {
   ecdhGenerateKeys(): { publicKey: Uint8Array; privateKey: Uint8Array } {
     const ecdh = crypto.createECDH('secp256k1');
     ecdh.generateKeys();
+    let priv = ecdh.getPrivateKey();
+    // Node.js crypto sometimes strips leading zeros; ensure it's 32 bytes
+    if (priv.length < 32) {
+      const padded = Buffer.alloc(32, 0);
+      priv.copy(padded, 32 - priv.length);
+      priv = padded;
+    }
     return {
       publicKey: new Uint8Array(ecdh.getPublicKey()),
-      privateKey: new Uint8Array(ecdh.getPrivateKey()),
+      privateKey: new Uint8Array(priv),
     };
   }
 

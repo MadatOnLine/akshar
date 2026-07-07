@@ -14,7 +14,7 @@ export type { CryptoProvider } from './provider.js';
 export { NodeCryptoProvider } from './node-provider.js';
 export { MobileCryptoProvider } from './mobile-provider.js';
 export { generateKeyPair, deriveSharedKey } from './keys.js';
-export { encrypt, decrypt } from './encryption.js';
+export { encrypt, decrypt, ratchetKey } from './encryption.js';
 export { wrapOnion, peelOnion, wrapReturnOnion } from './onion.js';
 export { computeFaceHash, hammingDistance } from './face-hash.js';
 export { generateMsgId, toHex, fromHex } from './utils.js';

@@ -6,6 +6,8 @@ import { createServer } from 'http';
 import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { setCryptoProvider, NodeCryptoProvider } from '@akshar/crypto';
 import { config } from './config.js';
 import { initDatabases } from './db/couch.js';
@@ -26,8 +28,11 @@ const io = new SocketServer(server, {
 });
 // --- Express middleware ---
 app.use(cors());
-app.use(helmet());
+app.use(helmet({ contentSecurityPolicy: false })); // Disable CSP for dev web UI
 app.use(express.json({ limit: '5mb' }));
+// Serve web UI
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, '..', 'public')));
 // Attach io to requests (for relay handler)
 app.use((req, _res, next) => {
     req.io = io;
@@ -62,6 +67,10 @@ async function start() {
 start().catch((err) => {
     console.error('[Mesh] Startup failed:', err);
     process.exit(1);
+});
+// Prevent unhandled rejections from crashing the process
+process.on('unhandledRejection', (err) => {
+    console.error('[Mesh] Unhandled rejection:', err);
 });
 export { app, server, io };
 //# sourceMappingURL=index.js.map

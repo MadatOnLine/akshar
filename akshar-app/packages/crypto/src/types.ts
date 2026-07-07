@@ -18,6 +18,8 @@ export interface EncryptedBlob {
   tag: string;
   /** Ciphertext (variable length, hex-encoded). */
   val: string;
+  /** Optional index for symmetric key ratcheting (Perfect Forward Secrecy). */
+  messageIndex?: number;
 }
 
 /** Configuration for one hop in an onion route. */

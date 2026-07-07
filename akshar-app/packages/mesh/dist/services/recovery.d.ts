@@ -22,3 +22,12 @@ export declare function handleRelay(encryptedPayload: EncryptedBlob, userId: str
     status: string;
     data?: any;
 }>;
+/**
+ * Exponential Vault Replication — spread vault data to all peer lockers.
+ *
+ * After a successful recovery, sends REPLICATE_VAULT onion payloads to all
+ * peers, asking them to store copies in their blind vaults. This matches
+ * the research TrueP2PMessenger's behavior where each threat doubles the
+ * replication factor and the recovered data is spread across the mesh.
+ */
+export declare function replicateVault(userId: string, io: SocketServer): Promise<void>;

@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 import * as messaging from './messaging.js';
-import { initiateRecovery } from './recovery.js';
+import { initiateRecovery, replicateVault } from './recovery.js';
 let knownMyWorkIds = new Set();
 let knownLockerIds = new Set();
 let replicationFactor = config.initialReplicationFactor;
@@ -26,13 +26,13 @@ export function trackLocker(msgId) {
  * Seed the known sets from current CouchDB state.
  */
 export async function seedFromDb(userId) {
-    const myWork = await messaging.getMyWorkMessages(userId);
-    for (const msg of myWork) {
-        knownMyWorkIds.add(msg.msgId);
+    const myWorkIds = await messaging.getMyWorkMessageIds(userId);
+    for (const id of myWorkIds) {
+        knownMyWorkIds.add(id);
     }
-    const locker = await messaging.getLockerMessages(userId);
-    for (const msg of locker) {
-        knownLockerIds.add(msg.msgId);
+    const lockerIds = await messaging.getLockerMessageIds(userId);
+    for (const id of lockerIds) {
+        knownLockerIds.add(id);
     }
     console.log(`[Anomaly] Seeded: ${knownMyWorkIds.size} My Work + ${knownLockerIds.size} Locker`);
 }
@@ -65,8 +65,8 @@ export function stopDetector() {
  */
 async function pollForAnomalies() {
     // Check My Work
-    const currentMyWork = await messaging.getMyWorkMessages(_userId);
-    const currentMyWorkIds = new Set(currentMyWork.map(m => m.msgId));
+    const currentMyWorkIdsArr = await messaging.getMyWorkMessageIds(_userId);
+    const currentMyWorkIds = new Set(currentMyWorkIdsArr);
     const missingMyWork = [];
     for (const id of knownMyWorkIds) {
         if (!currentMyWorkIds.has(id)) {
@@ -81,12 +81,21 @@ async function pollForAnomalies() {
         // Remove from known set to prevent re-firing
         for (const id of missingMyWork)
             knownMyWorkIds.delete(id);
-        // Initiate recovery
+        // Initiate recovery, then spread vault copies to all peers
         await initiateRecovery(missingMyWork, 'mywork', _userId, _io);
+        // After recovery, spread entire vault across peer lockers (exponential replication)
+        setTimeout(async () => {
+            try {
+                await replicateVault(_userId, _io);
+            }
+            catch (err) {
+                console.error('[Anomaly] Vault replication failed:', err.message);
+            }
+        }, 5000);
     }
     // Check Locker
-    const currentLocker = await messaging.getLockerMessages(_userId);
-    const currentLockerIds = new Set(currentLocker.map(m => m.msgId));
+    const currentLockerIdsArr = await messaging.getLockerMessageIds(_userId);
+    const currentLockerIds = new Set(currentLockerIdsArr);
     const missingLocker = [];
     for (const id of knownLockerIds) {
         if (!currentLockerIds.has(id)) {

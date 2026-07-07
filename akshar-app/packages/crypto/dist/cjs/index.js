@@ -11,7 +11,7 @@
  *   const keys = generateKeyPair();
  */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.fromHex = exports.toHex = exports.generateMsgId = exports.hammingDistance = exports.computeFaceHash = exports.wrapReturnOnion = exports.peelOnion = exports.wrapOnion = exports.decrypt = exports.encrypt = exports.deriveSharedKey = exports.generateKeyPair = exports.MobileCryptoProvider = exports.NodeCryptoProvider = exports.getCryptoProvider = exports.setCryptoProvider = void 0;
+exports.fromHex = exports.toHex = exports.generateMsgId = exports.hammingDistance = exports.computeFaceHash = exports.wrapReturnOnion = exports.peelOnion = exports.wrapOnion = exports.ratchetKey = exports.decrypt = exports.encrypt = exports.deriveSharedKey = exports.generateKeyPair = exports.MobileCryptoProvider = exports.NodeCryptoProvider = exports.getCryptoProvider = exports.setCryptoProvider = void 0;
 // Provider
 var provider_js_1 = require("./provider.js");
 Object.defineProperty(exports, "setCryptoProvider", { enumerable: true, get: function () { return provider_js_1.setCryptoProvider; } });
@@ -28,6 +28,7 @@ Object.defineProperty(exports, "deriveSharedKey", { enumerable: true, get: funct
 var encryption_js_1 = require("./encryption.js");
 Object.defineProperty(exports, "encrypt", { enumerable: true, get: function () { return encryption_js_1.encrypt; } });
 Object.defineProperty(exports, "decrypt", { enumerable: true, get: function () { return encryption_js_1.decrypt; } });
+Object.defineProperty(exports, "ratchetKey", { enumerable: true, get: function () { return encryption_js_1.ratchetKey; } });
 // Onion routing
 var onion_js_1 = require("./onion.js");
 Object.defineProperty(exports, "wrapOnion", { enumerable: true, get: function () { return onion_js_1.wrapOnion; } });

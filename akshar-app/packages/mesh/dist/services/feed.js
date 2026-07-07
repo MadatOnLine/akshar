@@ -30,13 +30,23 @@ export async function shareToFeed(sharerId, originalAuthorId, sourceGroupId, sou
  * Get recent feed posts (paginated).
  */
 export async function getFeed(limit, skip) {
-    const result = await feedDb.find({
-        selector: { type: 'post' },
-        sort: [{ ts: 'desc' }],
-        limit: limit || config.feedPageSize,
-        skip: skip || 0,
-    });
-    return result.docs;
+    try {
+        const result = await feedDb.find({
+            selector: { type: 'post' },
+            sort: [{ ts: 'desc' }],
+            limit: limit || config.feedPageSize,
+            skip: skip || 0,
+        });
+        return result.docs;
+    }
+    catch {
+        const result = await feedDb.find({
+            selector: { type: 'post' },
+            limit: limit || config.feedPageSize,
+            skip: skip || 0,
+        });
+        return result.docs;
+    }
 }
 /**
  * React to a feed post (like/dislike/share).

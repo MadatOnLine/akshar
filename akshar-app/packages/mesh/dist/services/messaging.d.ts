@@ -36,3 +36,11 @@ export declare function storeBlind(doc: StoredMessage): Promise<boolean>;
  * Get specific messages by their IDs.
  */
 export declare function getByIds(msgIds: string[]): Promise<StoredMessage[]>;
+/**
+ * Slim query: Get IDs of all messages where this user is a participant.
+ */
+export declare function getMyWorkMessageIds(userId: string): Promise<string[]>;
+/**
+ * Slim query: Get IDs of all messages where this user is NOT a participant.
+ */
+export declare function getLockerMessageIds(userId: string): Promise<string[]>;

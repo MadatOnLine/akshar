@@ -27,12 +27,22 @@ export async function storeMessage(fromNode, toNode, ciphertext) {
  * Get message backlog for a group (most recent first).
  */
 export async function getBacklog(groupId, limit) {
-    const result = await vaultDb.find({
-        selector: { toNode: groupId, type: 'message' },
-        sort: [{ ts: 'desc' }],
-        limit: limit || config.messageBacklogLimit,
-    });
-    return result.docs;
+    try {
+        const result = await vaultDb.find({
+            selector: { toNode: groupId, type: 'message' },
+            sort: [{ ts: 'desc' }],
+            limit: limit || config.messageBacklogLimit,
+        });
+        return result.docs;
+    }
+    catch {
+        // Fallback without sort if index doesn't exist
+        const result = await vaultDb.find({
+            selector: { toNode: groupId, type: 'message' },
+            limit: limit || config.messageBacklogLimit,
+        });
+        return result.docs;
+    }
 }
 /**
  * Get all messages where this user is a participant (for anomaly detection).
@@ -90,5 +100,34 @@ export async function getByIds(msgIds) {
             docs.push(doc);
     }
     return docs;
+}
+/**
+ * Slim query: Get IDs of all messages where this user is a participant.
+ */
+export async function getMyWorkMessageIds(userId) {
+    const result = await vaultDb.find({
+        selector: {
+            type: 'message',
+            $or: [{ fromNode: userId }, { toNode: userId }],
+        },
+        fields: ['msgId'],
+        limit: 50000,
+    });
+    return result.docs.map((d) => d.msgId);
+}
+/**
+ * Slim query: Get IDs of all messages where this user is NOT a participant.
+ */
+export async function getLockerMessageIds(userId) {
+    const result = await vaultDb.find({
+        selector: {
+            type: 'message',
+            fromNode: { $ne: userId },
+            toNode: { $ne: userId },
+        },
+        fields: ['msgId'],
+        limit: 50000,
+    });
+    return result.docs.map((d) => d.msgId);
 }
 //# sourceMappingURL=messaging.js.map

@@ -16,7 +16,7 @@ export { MobileCryptoProvider } from './mobile-provider.js';
 // Key exchange
 export { generateKeyPair, deriveSharedKey } from './keys.js';
 // Encryption
-export { encrypt, decrypt } from './encryption.js';
+export { encrypt, decrypt, ratchetKey } from './encryption.js';
 // Onion routing
 export { wrapOnion, peelOnion, wrapReturnOnion } from './onion.js';
 // Face hashing

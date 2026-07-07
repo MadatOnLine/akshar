@@ -7,6 +7,7 @@ import {
   deriveSharedKey,
   encrypt,
   decrypt,
+  ratchetKey,
 } from '../src/index.js';
 
 beforeAll(() => {
@@ -149,3 +150,23 @@ describe('PBT: encrypt/decrypt round-trip', () => {
     );
   });
 });
+
+describe('ratchetKey (Forward Secrecy)', () => {
+  it('deterministically hashes the key to a new 32-byte key', () => {
+    const key = makeKey();
+    const nextKey = ratchetKey(key);
+    expect(nextKey).toBeInstanceOf(Uint8Array);
+    expect(nextKey.length).toBe(32);
+    // It should not be the same key
+    expect(nextKey).not.toEqual(key);
+    // It should be deterministic
+    const nextKeyAgain = ratchetKey(key);
+    expect(nextKey).toEqual(nextKeyAgain);
+  });
+
+  it('throws on invalid key length', () => {
+    const shortKey = new Uint8Array(16);
+    expect(() => ratchetKey(shortKey)).toThrow();
+  });
+});
+

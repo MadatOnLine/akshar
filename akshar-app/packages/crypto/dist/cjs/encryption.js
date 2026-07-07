@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.decrypt = exports.encrypt = void 0;
+exports.ratchetKey = exports.decrypt = exports.encrypt = void 0;
 /**
  * Symmetric Encryption — AES-256-GCM encrypt/decrypt.
  *
@@ -69,4 +69,23 @@ function decrypt(key, nonce, tag, val) {
     }
 }
 exports.decrypt = decrypt;
+/**
+ * Hash Ratchet (Key Derivation Function) for Perfect Forward Secrecy.
+ *
+ * Runs the current AES key through SHA-256 to deterministically generate
+ * the next 32-byte AES key. Because cryptographic hashes are one-way,
+ * it is mathematically impossible to reverse this function. If an attacker
+ * steals the 'currentKey', they cannot derive any past keys.
+ *
+ * @param currentKey - The current 32-byte AES key
+ * @returns The next 32-byte AES key
+ */
+function ratchetKey(currentKey) {
+    if (currentKey.length !== 32) {
+        throw new Error('ratchetKey: key must be exactly 32 bytes');
+    }
+    const provider = (0, provider_js_1.getCryptoProvider)();
+    return provider.sha256(currentKey);
+}
+exports.ratchetKey = ratchetKey;
 //# sourceMappingURL=encryption.js.map

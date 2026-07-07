@@ -64,4 +64,22 @@ export function decrypt(key, nonce, tag, val) {
         return null;
     }
 }
+/**
+ * Hash Ratchet (Key Derivation Function) for Perfect Forward Secrecy.
+ *
+ * Runs the current AES key through SHA-256 to deterministically generate
+ * the next 32-byte AES key. Because cryptographic hashes are one-way,
+ * it is mathematically impossible to reverse this function. If an attacker
+ * steals the 'currentKey', they cannot derive any past keys.
+ *
+ * @param currentKey - The current 32-byte AES key
+ * @returns The next 32-byte AES key
+ */
+export function ratchetKey(currentKey) {
+    if (currentKey.length !== 32) {
+        throw new Error('ratchetKey: key must be exactly 32 bytes');
+    }
+    const provider = getCryptoProvider();
+    return provider.sha256(currentKey);
+}
 //# sourceMappingURL=encryption.js.map
