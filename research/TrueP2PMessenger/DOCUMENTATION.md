@@ -338,6 +338,7 @@ Passed: 20 | Failed: 0
 5. **Dual Self-Healing Mesh:** Anomaly detection fires independently on unsigned deletions from both My Work and Locker. Onion-routed recovery wraps requests in 3-layer AES-256-GCM encryption, routes them through the peer mesh, retrieves blind vault backups, and rehydrates the origin node — all within ~5 seconds, automatically.
 6. **Exponential Vault Replication:** Each threat doubles the replication factor, spreading recovered data across all peer lockers via onion routing for maximum redundancy.
 7. **Onion Routing Privacy:** Intermediate relay nodes never see the recovery payload or final destination. Each node only knows the next hop, identical in principle to Tor circuit construction.
+8. **Perfect Forward Secrecy (Symmetric Ratchet):** After every message, the shared AES-256-GCM key is deterministically ratcheted (hashed via HKDF/SHA-256) into a brand new key. Even if a node's current state is seized, past ciphertexts stored in blind vaults can never be decrypted.
 
 ---
 
