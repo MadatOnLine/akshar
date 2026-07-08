@@ -133,22 +133,27 @@ Each node runs:
 
 ---
 
-## 4. Cryptography — The State Machine
+## 4. Cryptographic Protocol Specification
 
-### Step 1: ECDH secp256k1 Key Exchange
-On boot, each node generates an ephemeral ECDH keypair on the `secp256k1` curve (the same curve used by Bitcoin).
+The system employs a multi-stage cryptographic state machine to guarantee Zero-Knowledge and Perfect Forward Secrecy (PFS) during peer-to-peer communication.
 
-### Step 2: TCP Handshake
-When a TCP connection is established between two nodes, both sides immediately send a `hello` message containing their public key.
+### Step 1: Ephemeral Key Generation
+On initialization, each node generates an ephemeral Elliptic Curve Diffie-Hellman (ECDH) keypair using the `secp256k1` curve.
+
+### Step 2: Key Exchange Handshake
+Upon establishing a connection, nodes unconditionally exchange their ECDH public keys via an initial `hello` payload.
 
 ### Step 3: Shared Secret Derivation
-Each side computes the shared secret using their private key and the peer's public key, then hashes it into a 256-bit AES key. The mathematical property of ECDH guarantees that A's derived key equals B's derived key, without either side ever transmitting their private key. No node holds a key for a conversation it was not part of. This means Node C physically cannot decrypt A↔B messages — it is enforced by mathematics, not permissions.
+Each node computes the shared secret locally using its private key and the remote peer's public key. This secret is then subjected to a cryptographic hash (SHA-256) to derive the initial 256-bit AES master key. The algebraic properties of ECDH ensure that both nodes independently arrive at the exact same symmetric key without ever transmitting private material over the network. 
 
-### Step 4: AES-256-GCM Encryption
-Every message is encrypted using AES-256-GCM (Galois/Counter Mode), which provides both confidentiality and authenticity.
+### Step 4: Authenticated Encryption (AES-256-GCM)
+All application-layer payloads are encrypted utilizing AES-256-GCM (Galois/Counter Mode). This construct guarantees both data confidentiality (encryption) and integrity (authentication tags). Any tampering by intermediary relay nodes results in an immediate cryptographic failure during decryption.
 
-### Step 5: UI Blocking
-The frontend chat input and peer buttons remain **strictly disabled** until the backend confirms that the ECDH handshake with each specific peer is complete.
+### Step 5: Symmetric-Key Ratcheting (Perfect Forward Secrecy)
+To satisfy the requirements of Perfect Forward Secrecy (PFS), the derived AES key is never reused across multiple message states. After each payload encryption or decryption event, the current 256-bit AES key is deterministically ratcheted (hashed via SHA-256) to produce the subsequent key state. This one-way transformation mathematically guarantees that if a node's active memory or storage is compromised, adversaries cannot compute previous keys to decrypt historical ciphertexts residing in blind vaults.
+
+### Step 6: Enforced Cryptographic UI Blocking
+The frontend user interface strictly blocks all input vectors and interaction states until the backend explicitly signals the successful completion of Steps 1 through 3 for a given peer channel.
 
 ---
 
@@ -212,20 +217,24 @@ Real-time health dashboard showing:
 
 ---
 
-## 8. SQLite Vault Schema
+## 8. Cryptographic Vault Schema (CouchDB Document)
 
-```sql
-CREATE TABLE vault (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  msgId     TEXT UNIQUE,    -- UUID preventing duplicate ingestion
-  fromNode  TEXT,           -- sender node name
-  toNode    TEXT,           -- intended recipient node name
-  nonce     TEXT,           -- 12-byte random IV (hex)
-  tag       TEXT,           -- 16-byte GCM auth tag (hex)
-  val       TEXT,           -- AES-256-GCM ciphertext (hex)
-  ts        INTEGER         -- Unix timestamp
-);
+With the transition to CouchDB (detailed in Section 13), the blind vault records are stored as distributed JSON documents rather than relational rows. The schema enforces strict immutability of the cryptographic payload:
+
+```json
+{
+  "_id": "string (msgId)",
+  "msgId": "string (UUID preventing duplicate ingestion)",
+  "fromNode": "string (sender node identifier)",
+  "toNode": "string (intended recipient node identifier)",
+  "nonce": "string (12-byte random IV, hex encoded)",
+  "tag": "string (16-byte GCM auth tag, hex encoded)",
+  "val": "string (AES-256-GCM ciphertext, hex encoded)",
+  "ts": "integer (Unix timestamp)",
+  "messageIndex": "integer (Ratchet sequence state)"
+}
 ```
+*Note: The `messageIndex` field tracks the ratcheting sequence, ensuring out-of-order delivery does not desynchronize the cryptographic state machine.*
 
 ---
 
