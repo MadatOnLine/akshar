@@ -5,7 +5,7 @@
  * Decryption returns null on failure (fail-closed, no information leakage).
  */
 import { getCryptoProvider } from './provider.js';
-import { toHex, fromHex } from './utils.js';
+import { toHex, fromHex, stringToBytes, bytesToString } from './utils.js';
 /**
  * Encrypt plaintext with AES-256-GCM.
  *
@@ -18,7 +18,7 @@ export function encrypt(key, plaintext) {
         throw new Error('encrypt: key must be exactly 32 bytes');
     }
     const provider = getCryptoProvider();
-    const plaintextBytes = new TextEncoder().encode(plaintext);
+    const plaintextBytes = stringToBytes(plaintext);
     const { nonce, tag, ciphertext } = provider.aesGcmEncrypt(key, plaintextBytes);
     return {
         nonce: toHex(nonce),
@@ -58,9 +58,10 @@ export function decrypt(key, nonce, tag, val) {
         if (plainBytes === null) {
             return null;
         }
-        return new TextDecoder().decode(plainBytes);
+        return bytesToString(plainBytes);
     }
-    catch {
+    catch (err) {
+        console.error('DECRYPTION ERROR:', err);
         return null;
     }
 }

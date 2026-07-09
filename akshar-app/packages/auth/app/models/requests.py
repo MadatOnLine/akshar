@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -74,11 +75,11 @@ class RefreshRequest(BaseModel):
 
 
 class ProfileUpdateRequest(BaseModel):
-    name: str | None = Field(None, min_length=1, max_length=50)
+    name: Optional[str] = Field(None, min_length=1, max_length=50)
 
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v: str | None) -> str | None:
+    def validate_name(cls, v: Optional[str]) -> Optional[str]:
         if v is not None and not re.match(r"^[a-zA-Z0-9 \-]+$", v):
             raise ValueError("Name may only contain letters, numbers, spaces, and hyphens")
         return v.strip() if v else v

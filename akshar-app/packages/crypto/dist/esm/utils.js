@@ -36,4 +36,36 @@ export function fromHex(hex) {
 export function generateMsgId() {
     return uuidv4();
 }
+/**
+ * Robust UTF-8 Encoding for React Native / Hermes (avoids TextEncoder)
+ */
+export function stringToBytes(str) {
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(str);
+    }
+    const utf8 = unescape(encodeURIComponent(str));
+    const result = new Uint8Array(utf8.length);
+    for (let i = 0; i < utf8.length; i++) {
+        result[i] = utf8.charCodeAt(i);
+    }
+    return result;
+}
+/**
+ * Robust UTF-8 Decoding for React Native / Hermes (avoids TextDecoder)
+ */
+export function bytesToString(bytes) {
+    if (typeof TextDecoder !== 'undefined') {
+        return new TextDecoder().decode(bytes);
+    }
+    let utf8 = '';
+    for (let i = 0; i < bytes.length; i++) {
+        utf8 += String.fromCharCode(bytes[i]);
+    }
+    try {
+        return decodeURIComponent(escape(utf8));
+    }
+    catch (err) {
+        return utf8; // Fallback if invalid
+    }
+}
 //# sourceMappingURL=utils.js.map

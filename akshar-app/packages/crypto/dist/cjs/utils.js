@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.generateMsgId = exports.fromHex = exports.toHex = void 0;
+exports.bytesToString = exports.stringToBytes = exports.generateMsgId = exports.fromHex = exports.toHex = void 0;
 /**
  * Utilities — Hex encoding, UUID generation, and shared helpers.
  */
@@ -42,4 +42,38 @@ function generateMsgId() {
     return (0, uuid_1.v4)();
 }
 exports.generateMsgId = generateMsgId;
+/**
+ * Robust UTF-8 Encoding for React Native / Hermes (avoids TextEncoder)
+ */
+function stringToBytes(str) {
+    if (typeof TextEncoder !== 'undefined') {
+        return new TextEncoder().encode(str);
+    }
+    const utf8 = unescape(encodeURIComponent(str));
+    const result = new Uint8Array(utf8.length);
+    for (let i = 0; i < utf8.length; i++) {
+        result[i] = utf8.charCodeAt(i);
+    }
+    return result;
+}
+exports.stringToBytes = stringToBytes;
+/**
+ * Robust UTF-8 Decoding for React Native / Hermes (avoids TextDecoder)
+ */
+function bytesToString(bytes) {
+    if (typeof TextDecoder !== 'undefined') {
+        return new TextDecoder().decode(bytes);
+    }
+    let utf8 = '';
+    for (let i = 0; i < bytes.length; i++) {
+        utf8 += String.fromCharCode(bytes[i]);
+    }
+    try {
+        return decodeURIComponent(escape(utf8));
+    }
+    catch (err) {
+        return utf8; // Fallback if invalid
+    }
+}
+exports.bytesToString = bytesToString;
 //# sourceMappingURL=utils.js.map

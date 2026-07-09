@@ -6,7 +6,7 @@
  */
 import { getCryptoProvider } from './provider.js';
 import type { EncryptedBlob } from './types.js';
-import { toHex, fromHex } from './utils.js';
+import { toHex, fromHex, stringToBytes, bytesToString } from './utils.js';
 
 /**
  * Encrypt plaintext with AES-256-GCM.
@@ -21,7 +21,7 @@ export function encrypt(key: Uint8Array, plaintext: string): EncryptedBlob {
   }
 
   const provider = getCryptoProvider();
-  const plaintextBytes = new TextEncoder().encode(plaintext);
+  const plaintextBytes = stringToBytes(plaintext);
   const { nonce, tag, ciphertext } = provider.aesGcmEncrypt(key, plaintextBytes);
 
   return {
@@ -73,8 +73,9 @@ export function decrypt(
       return null;
     }
 
-    return new TextDecoder().decode(plainBytes);
-  } catch {
+    return bytesToString(plainBytes);
+  } catch (err) {
+    console.error('DECRYPTION ERROR:', err);
     return null;
   }
 }

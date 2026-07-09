@@ -21,7 +21,7 @@ function encrypt(key, plaintext) {
         throw new Error('encrypt: key must be exactly 32 bytes');
     }
     const provider = (0, provider_js_1.getCryptoProvider)();
-    const plaintextBytes = new TextEncoder().encode(plaintext);
+    const plaintextBytes = (0, utils_js_1.stringToBytes)(plaintext);
     const { nonce, tag, ciphertext } = provider.aesGcmEncrypt(key, plaintextBytes);
     return {
         nonce: (0, utils_js_1.toHex)(nonce),
@@ -62,9 +62,10 @@ function decrypt(key, nonce, tag, val) {
         if (plainBytes === null) {
             return null;
         }
-        return new TextDecoder().decode(plainBytes);
+        return (0, utils_js_1.bytesToString)(plainBytes);
     }
-    catch {
+    catch (err) {
+        console.error('DECRYPTION ERROR:', err);
         return null;
     }
 }

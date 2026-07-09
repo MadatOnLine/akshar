@@ -5,6 +5,20 @@ import { config } from '../config.js';
 // In-memory peer key store (loaded from CouchDB on startup)
 const peerKeys = new Map();
 /**
+ * Continuous concurrency pool to prevent head-of-line blocking in batches.
+ */
+async function asyncPool(concurrency, items, fn) {
+    const executing = new Set();
+    for (const item of items) {
+        const p = fn(item).catch(() => { }).finally(() => executing.delete(p));
+        executing.add(p);
+        if (executing.size >= concurrency) {
+            await Promise.race(executing);
+        }
+    }
+    await Promise.all(executing);
+}
+/**
  * Register a peer's ECDH-derived AES key and address.
  */
 export function registerPeer(peerId, key, addr) {
@@ -27,46 +41,42 @@ export async function initiateRecovery(missingIds, recoveryType, userId, io) {
         return;
     }
     console.log(`[Recovery] Initiating ${recoveryType} recovery for ${missingIds.length} msgId(s)`);
-    const batchSize = 5;
-    for (let i = 0; i < peers.length; i += batchSize) {
-        const batch = peers.slice(i, i + batchSize);
-        await Promise.allSettled(batch.map(async ([targetId, targetInfo]) => {
-            const otherPeers = peers.filter(([id]) => id !== targetId);
-            // Build hop list (max 3)
-            const hops = [];
-            for (const [, peerInfo] of otherPeers.slice(0, 2)) {
-                hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
+    await asyncPool(5, peers, async ([targetId, targetInfo]) => {
+        const otherPeers = peers.filter(([id]) => id !== targetId);
+        // Build hop list (max 3)
+        const hops = [];
+        for (const [, peerInfo] of otherPeers.slice(0, 2)) {
+            hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
+        }
+        hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
+        // Build return path
+        const returnPath = [
+            ...otherPeers.slice(0, 2).map(([id]) => ({ node: id })).reverse(),
+            { node: userId },
+        ];
+        const payload = {
+            type: 'RECOVERY_REQUEST',
+            missingIds,
+            originNode: userId,
+            returnPath,
+            recoveryType,
+        };
+        try {
+            const onion = wrapOnion(payload, hops.slice(0, 3));
+            const resp = await fetch(`${onion.firstHop}/mesh/relay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
+                signal: AbortSignal.timeout(config.aiTimeout * 2),
+            });
+            if (resp.ok) {
+                console.log(`[Recovery] Onion dispatched to ${targetId}`);
             }
-            hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
-            // Build return path
-            const returnPath = [
-                ...otherPeers.slice(0, 2).map(([id]) => ({ node: id })).reverse(),
-                { node: userId },
-            ];
-            const payload = {
-                type: 'RECOVERY_REQUEST',
-                missingIds,
-                originNode: userId,
-                returnPath,
-                recoveryType,
-            };
-            try {
-                const onion = wrapOnion(payload, hops.slice(0, 3));
-                const resp = await fetch(`${onion.firstHop}/mesh/relay`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
-                    signal: AbortSignal.timeout(config.aiTimeout * 2),
-                });
-                if (resp.ok) {
-                    console.log(`[Recovery] Onion dispatched to ${targetId}`);
-                }
-            }
-            catch (err) {
-                console.error(`[Recovery] Dispatch to ${targetId} failed:`, err.message);
-            }
-        }));
-    }
+        }
+        catch (err) {
+            console.error(`[Recovery] Dispatch to ${targetId} failed:`, err.message);
+        }
+    });
 }
 /**
  * Handle a relay request — peel one layer and forward or process.
@@ -181,46 +191,42 @@ export async function replicateVault(userId, io) {
     const factor = anomaly.getReplicationFactor();
     console.log(`[Replication] Spreading ${allRows.length} row(s) to ${peers.length} peers (factor: ×${factor})`);
     io.emit('sys', `Spreading ${allRows.length} record(s) across ${peers.length} peer lockers (replication factor: ×${factor})`);
-    const batchSize = 5;
-    for (let i = 0; i < peers.length; i += batchSize) {
-        const batch = peers.slice(i, i + batchSize);
-        await Promise.allSettled(batch.map(async ([targetId, targetInfo]) => {
-            const otherPeers = peers.filter(([id]) => id !== targetId);
-            // Build hop list (max 3 hops via intermediates)
-            const hops = [];
-            for (const [, peerInfo] of otherPeers.slice(0, 2)) {
-                hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
-            }
-            hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
-            const payload = {
-                type: 'REPLICATE_VAULT',
-                rows: allRows.map(r => ({
-                    msgId: r.msgId,
-                    fromNode: r.fromNode,
-                    toNode: r.toNode,
-                    nonce: r.nonce,
-                    tag: r.tag,
-                    val: r.val,
-                    ts: r.ts,
-                })),
-                originNode: userId,
-                replicationFactor: factor,
-            };
-            try {
-                const onion = wrapOnion(payload, hops.slice(0, 3));
-                await fetch(`${onion.firstHop}/mesh/relay`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
-                    signal: AbortSignal.timeout(15000),
-                });
-                console.log(`[Replication] Vault replicated to ${targetId}`);
-            }
-            catch (err) {
-                console.error(`[Replication] Dispatch to ${targetId} failed:`, err.message);
-            }
-        }));
-    }
+    await asyncPool(5, peers, async ([targetId, targetInfo]) => {
+        const otherPeers = peers.filter(([id]) => id !== targetId);
+        // Build hop list (max 3 hops via intermediates)
+        const hops = [];
+        for (const [, peerInfo] of otherPeers.slice(0, 2)) {
+            hops.push({ key: peerInfo.key, nextAddr: peerInfo.addr });
+        }
+        hops.push({ key: targetInfo.key, nextAddr: targetInfo.addr });
+        const payload = {
+            type: 'REPLICATE_VAULT',
+            rows: allRows.map(r => ({
+                msgId: r.msgId,
+                fromNode: r.fromNode,
+                toNode: r.toNode,
+                nonce: r.nonce,
+                tag: r.tag,
+                val: r.val,
+                ts: r.ts,
+            })),
+            originNode: userId,
+            replicationFactor: factor,
+        };
+        try {
+            const onion = wrapOnion(payload, hops.slice(0, 3));
+            await fetch(`${onion.firstHop}/mesh/relay`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ encryptedPayload: onion.ciphertext }),
+                signal: AbortSignal.timeout(15000),
+            });
+            console.log(`[Replication] Vault replicated to ${targetId}`);
+        }
+        catch (err) {
+            console.error(`[Replication] Dispatch to ${targetId} failed:`, err.message);
+        }
+    });
     io.emit('REPLICATION_SPREAD', {
         factor,
         rows: allRows.length,

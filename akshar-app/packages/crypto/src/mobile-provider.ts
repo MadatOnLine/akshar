@@ -12,41 +12,57 @@
  * when the React Native environment is set up.
  */
 import type { CryptoProvider } from './provider.js';
+import * as secp from '@noble/secp256k1';
+import { sha256 } from '@noble/hashes/sha256';
+import { gcm } from '@noble/ciphers/aes';
 
-/**
- * Placeholder — will be implemented with @noble/* libraries in akshar-mobile.
- * For now, this serves as the type contract that the mobile build must satisfy.
- */
 export class MobileCryptoProvider implements CryptoProvider {
-  randomBytes(_length: number): Uint8Array {
-    throw new Error('MobileCryptoProvider: not yet implemented. Use NodeCryptoProvider for server/testing.');
+  randomBytes(length: number): Uint8Array {
+    return crypto.getRandomValues(new Uint8Array(length));
   }
 
-  sha256(_data: Uint8Array): Uint8Array {
-    throw new Error('MobileCryptoProvider: not yet implemented.');
+  sha256(data: Uint8Array): Uint8Array {
+    return sha256(data);
   }
 
   ecdhGenerateKeys(): { publicKey: Uint8Array; privateKey: Uint8Array } {
-    throw new Error('MobileCryptoProvider: not yet implemented.');
+    const priv = secp.utils.randomPrivateKey();
+    const pub = secp.getPublicKey(priv);
+    return { publicKey: pub, privateKey: priv };
   }
 
-  ecdhComputeSecret(_privateKey: Uint8Array, _peerPublicKey: Uint8Array): Uint8Array {
-    throw new Error('MobileCryptoProvider: not yet implemented.');
+  ecdhComputeSecret(privateKey: Uint8Array, peerPublicKey: Uint8Array): Uint8Array {
+    const raw = secp.getSharedSecret(privateKey, peerPublicKey);
+    return this.sha256(raw);
   }
 
   aesGcmEncrypt(
-    _key: Uint8Array,
-    _plaintext: Uint8Array
+    key: Uint8Array,
+    plaintext: Uint8Array
   ): { nonce: Uint8Array; tag: Uint8Array; ciphertext: Uint8Array } {
-    throw new Error('MobileCryptoProvider: not yet implemented.');
+    const nonce = this.randomBytes(12);
+    const cipher = gcm(key, nonce);
+    const encrypted = cipher.encrypt(plaintext);
+    const ciphertextOnly = encrypted.slice(0, -16);
+    const tag = encrypted.slice(-16);
+    return { nonce, tag, ciphertext: ciphertextOnly };
   }
 
   aesGcmDecrypt(
-    _key: Uint8Array,
-    _nonce: Uint8Array,
-    _tag: Uint8Array,
-    _ciphertext: Uint8Array
+    key: Uint8Array,
+    nonce: Uint8Array,
+    tag: Uint8Array,
+    ciphertext: Uint8Array
   ): Uint8Array | null {
-    throw new Error('MobileCryptoProvider: not yet implemented.');
+    try {
+      const cipher = gcm(key, nonce);
+      const combined = new Uint8Array(ciphertext.length + 16);
+      combined.set(ciphertext);
+      combined.set(tag, ciphertext.length);
+      return cipher.decrypt(combined);
+    } catch (err) {
+      console.error('MOBILE GCM DECRYPT ERROR:', err);
+      return null;
+    }
   }
 }

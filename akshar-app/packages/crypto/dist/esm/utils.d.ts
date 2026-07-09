@@ -12,4 +12,12 @@ export declare function fromHex(hex: string): Uint8Array;
  * Uses cryptographically secure randomness.
  */
 export declare function generateMsgId(): string;
+/**
+ * Robust UTF-8 Encoding for React Native / Hermes (avoids TextEncoder)
+ */
+export declare function stringToBytes(str: string): Uint8Array;
+/**
+ * Robust UTF-8 Decoding for React Native / Hermes (avoids TextDecoder)
+ */
+export declare function bytesToString(bytes: Uint8Array): string;
 //# sourceMappingURL=utils.d.ts.map

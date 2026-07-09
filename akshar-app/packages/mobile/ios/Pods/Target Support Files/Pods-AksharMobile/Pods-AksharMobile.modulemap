@@ -1,0 +1,6 @@
+module Pods_AksharMobile {
+  umbrella header "Pods-AksharMobile-umbrella.h"
+
+  export *
+  module * { export * }
+}
