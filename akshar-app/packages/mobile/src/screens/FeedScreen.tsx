@@ -13,6 +13,7 @@ import {
 import { FeedPostCard } from '../components/FeedPostCard';
 import { mesh } from '../services/api';
 import type { FeedPost } from '../types';
+import { useFocusEffect } from '@react-navigation/native';
 
 export function FeedScreen() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -25,7 +26,9 @@ export function FeedScreen() {
   const loadFeed = useCallback(async () => {
     try {
       const result = await mesh.getFeed(20, 0);
-      setPosts(result.posts || []);
+      // Sort on client side to guarantee order in case DB index fallback fired
+      const sorted = (result.posts || []).sort((a: FeedPost, b: FeedPost) => b.ts - a.ts);
+      setPosts(sorted);
     } catch (err) {
       console.error('Failed to load feed:', err);
     } finally {
@@ -34,7 +37,11 @@ export function FeedScreen() {
     }
   }, []);
 
-  useEffect(() => { loadFeed(); }, [loadFeed]);
+  useFocusEffect(
+    useCallback(() => {
+      loadFeed();
+    }, [loadFeed])
+  );
 
   const handleRefresh = () => {
     setRefreshing(true);

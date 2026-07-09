@@ -25,6 +25,19 @@ export async function initDatabases(): Promise<void> {
       }
     }
   }
+
+  // Create indexes for sorting by timestamp
+  try {
+    await feedDb.createIndex({ index: { fields: ['ts'] }, name: 'feed-ts-index' });
+  } catch (err: any) {
+    console.error('Failed to create feed index:', err.message);
+  }
+  
+  try {
+    await vaultDb.createIndex({ index: { fields: ['ts'] }, name: 'vault-ts-index' });
+  } catch (err: any) {
+    console.error('Failed to create vault index:', err.message);
+  }
 }
 
 /**
