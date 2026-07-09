@@ -1,8 +1,8 @@
 /**
  * MessageBubble — displays a decrypted chat message with trust badge and bot indicator.
  */
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { TrustBadge } from './TrustBadge';
 import type { DecryptedMessage } from '../types';
 
@@ -10,16 +10,26 @@ interface MessageBubbleProps {
   message: DecryptedMessage;
   isOwn: boolean;
   senderTier?: string;
+  onShare?: () => void;
 }
 
-export function MessageBubble({ message, isOwn, senderTier }: MessageBubbleProps) {
+export function MessageBubble({ message, isOwn, senderTier, onShare }: MessageBubbleProps) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
+
   const bubbleStyle = isOwn ? styles.ownBubble : styles.otherBubble;
-  const textColor = isOwn ? '#FFFFFF' : '#1A1A1A';
 
   return (
-    <View
-      style={[styles.container, isOwn && styles.containerOwn]}
-      data-testid={`message-bubble-${message.msgId}`}
+    <Animated.View
+      style={[styles.container, isOwn && styles.containerOwn, { opacity: fadeAnim }]}
+      testID={`message-bubble-${message.msgId}`}
     >
       {!isOwn && (
         <View style={styles.header}>
@@ -28,7 +38,7 @@ export function MessageBubble({ message, isOwn, senderTier }: MessageBubbleProps
         </View>
       )}
       <View style={[styles.bubble, bubbleStyle]}>
-        <Text style={[styles.text, { color: textColor }]}>{message.text}</Text>
+        <Text style={styles.text}>{message.text}</Text>
       </View>
       <View style={styles.footer}>
         <Text style={styles.time}>
@@ -44,8 +54,18 @@ export function MessageBubble({ message, isOwn, senderTier }: MessageBubbleProps
             AI
           </Text>
         )}
+        {onShare && (
+          <TouchableOpacity
+            onPress={onShare}
+            style={styles.shareButton}
+            accessibilityLabel="Share message"
+            testID={`message-share-${message.msgId}`}
+          >
+            <Text style={styles.shareIcon}>📤</Text>
+          </TouchableOpacity>
+        )}
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -68,23 +88,27 @@ const styles = StyleSheet.create({
   sender: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#666',
+    color: '#6d8cff',
   },
   bubble: {
     padding: 12,
     borderRadius: 16,
+    borderWidth: 1,
   },
   ownBubble: {
-    backgroundColor: '#6200EE',
+    backgroundColor: '#1a2d4a',
+    borderColor: '#2a4060',
     borderBottomRightRadius: 4,
   },
   otherBubble: {
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#1c2433',
+    borderColor: '#283347',
     borderBottomLeftRadius: 4,
   },
   text: {
     fontSize: 16,
     lineHeight: 22,
+    color: '#e8edf6',
   },
   footer: {
     flexDirection: 'row',
@@ -94,7 +118,7 @@ const styles = StyleSheet.create({
   },
   time: {
     fontSize: 10,
-    color: '#999',
+    color: '#566178',
   },
   botIndicator: {
     fontSize: 12,
@@ -103,8 +127,16 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: '#FF5722',
     fontWeight: '700',
-    backgroundColor: '#FFF3E0',
+    backgroundColor: '#3a2215',
     paddingHorizontal: 4,
     borderRadius: 4,
+    overflow: 'hidden',
+  },
+  shareButton: {
+    marginLeft: 4,
+    padding: 2,
+  },
+  shareIcon: {
+    fontSize: 12,
   },
 });

@@ -14,6 +14,7 @@ export interface DecryptedMessage {
   fromId: string;
   text: string;
   ts: number;
+  senderTier?: string;
   classification?: {
     verdict: string;
     confidence: number;
@@ -33,6 +34,7 @@ export interface Group {
 export interface FeedPost {
   postId: string;
   sharerId: string;
+  sharerName?: string;
   originalAuthorId: string;
   sourceGroupId: string;
   content: string;
@@ -67,3 +69,20 @@ export interface LivenessChallenge {
 }
 
 export type TrustTier = 'Low Trust / Suspect' | 'Provisional' | 'Likely Human' | 'Trusted Human';
+
+/* ─── Navigation param lists ─── */
+
+export type RootStackParamList = {
+  Home: undefined;
+  Chat: { groupId: string; groupName?: string };
+};
+
+export type AuthStackParamList = {
+  FaceLogin: undefined;
+};
+
+export type MainTabParamList = {
+  Groups: undefined;
+  Feed: undefined;
+  Profile: undefined;
+};

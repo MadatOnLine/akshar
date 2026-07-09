@@ -1,8 +1,19 @@
 /**
  * ChatScreen — encrypted group messaging with real-time WebSocket.
+ * Features ECDH Key Exchange, Hash Ratcheting, and AI classification.
  */
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, StyleSheet, KeyboardAvoidingView, Platform, SafeAreaView } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  FlatList,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+} from 'react-native';
 import { MessageBubble } from '../components/MessageBubble';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../providers/AuthProvider';
@@ -10,8 +21,7 @@ import { mesh, getToken } from '../services/api';
 import type { DecryptedMessage } from '../types';
 import io from 'socket.io-client';
 import { config } from '../config';
-import { encrypt, decrypt } from '@akshar/crypto';
-import { sha256 } from '@noble/hashes/sha256';
+import { encrypt, decrypt, generateKeyPair, deriveSharedKey, ratchetKey, toHex } from '@akshar/crypto';
 
 interface ChatScreenProps {
   route: { params: { groupId: string; groupName: string } };
@@ -25,40 +35,63 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [inputText, setInputText] = useState('');
   const [keysReady, setKeysReady] = useState(false);
   const [typingStartTs, setTypingStartTs] = useState(0);
+  const [peerTyping, setPeerTyping] = useState(false);
   const [shareDialog, setShareDialog] = useState<{ msgId: string; text: string } | null>(null);
+  const [showRatcheted, setShowRatcheted] = useState(false);
+  
   const flatListRef = useRef<FlatList>(null);
   const [socket, setSocket] = useState<any>(null);
+  
+  // Crypto State
+  const myKeyPairRef = useRef(generateKeyPair());
+  const peerKeysRef = useRef<Map<string, Uint8Array>>(new Map());
   const sharedKeyRef = useRef<Uint8Array | null>(null);
 
   useEffect(() => {
-    // Generate deterministic key for MVP based on groupId
-    const encoder = new TextEncoder();
-    sharedKeyRef.current = sha256(encoder.encode(groupId));
-    setKeysReady(true);
-
     const token = getToken();
     const newSocket = io(config.meshWsUrl, {
       auth: { token }
     });
 
-    if (newSocket.connected) {
-      newSocket.emit('join-room', { groupId });
-    }
+    setSocket(newSocket);
 
     newSocket.on('connect', () => {
       newSocket.emit('join-room', { groupId });
+      // Publish our ECDH public key
+      newSocket.emit('publish-key', { publicKey: myKeyPairRef.current.publicKey });
+    });
+
+    // Listen for peer keys to establish ECDH shared secrets
+    newSocket.on('peer-key', (data: { userId: string; publicKey: string }) => {
+      if (data.userId !== userId) {
+        try {
+          const sharedSecret = deriveSharedKey(myKeyPairRef.current.privateKey, data.publicKey);
+          peerKeysRef.current.set(data.userId, sharedSecret);
+          
+          // For MVP group chat, use the first peer's key as the active shared key
+          if (!sharedKeyRef.current) {
+            sharedKeyRef.current = sharedSecret;
+            setKeysReady(true);
+          }
+        } catch (err) {
+          console.error('Failed to derive shared key:', err);
+        }
+      }
     });
 
     newSocket.on('backlog', (data: { groupId: string; messages: any[] }) => {
       if (data.groupId !== groupId) return;
       
       const decryptedMessages: DecryptedMessage[] = data.messages.map(msg => {
-        const text = decrypt(
-          sharedKeyRef.current!,
-          msg.ciphertext?.nonce || msg.nonce,
-          msg.ciphertext?.tag || msg.tag,
-          msg.ciphertext?.val || msg.val
-        ) || '[Decryption Failed]';
+        let text = '[Decryption Failed]';
+        if (sharedKeyRef.current) {
+           text = decrypt(
+            sharedKeyRef.current,
+            msg.ciphertext?.nonce || msg.nonce,
+            msg.ciphertext?.tag || msg.tag,
+            msg.ciphertext?.val || msg.val
+          ) || '[Decryption Failed]';
+        }
         
         return {
           msgId: msg.msgId,
@@ -67,6 +100,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
           text,
           ts: msg.ts,
           classification: msg.classification,
+          senderTier: msg.classification?.tier,
         };
       });
       
@@ -77,15 +111,18 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     newSocket.on('new-message', (msg: any) => {
       if (msg.toNode !== groupId) return;
       
-      const text = decrypt(
-        sharedKeyRef.current!,
-        msg.ciphertext?.nonce || msg.nonce,
-        msg.ciphertext?.tag || msg.tag,
-        msg.ciphertext?.val || msg.val
-      ) || '[Decryption Failed]';
+      let text = '[Decryption Failed]';
+      if (sharedKeyRef.current) {
+        text = decrypt(
+          sharedKeyRef.current,
+          msg.ciphertext?.nonce || msg.nonce,
+          msg.ciphertext?.tag || msg.tag,
+          msg.ciphertext?.val || msg.val
+        ) || '[Decryption Failed]';
+      }
       
       setMessages(prev => {
-        if (prev.some(p => p.msgId === msg.msgId || p.text === text && p.fromId === userId && Math.abs(p.ts - msg.ts) < 5000)) return prev;
+        if (prev.some(p => p.msgId === msg.msgId || (p.text === text && p.fromId === userId && Math.abs(p.ts - msg.ts) < 5000))) return prev;
         
         const newMsg: DecryptedMessage = {
           msgId: msg.msgId,
@@ -94,6 +131,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
           text,
           ts: msg.ts,
           classification: msg.classification,
+          senderTier: msg.classification?.tier,
         };
         return [...prev, newMsg];
       });
@@ -104,13 +142,18 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       setMessages(prev =>
         prev.map(msg =>
           msg.msgId === data.msgId
-            ? { ...msg, classification: data.classification }
+            ? { ...msg, classification: data.classification, senderTier: data.classification?.tier }
             : msg
         )
       );
     });
 
-    setSocket(newSocket);
+    newSocket.on('user-typing', (data: { userId: string }) => {
+      if (data.userId !== userId) {
+        setPeerTyping(true);
+        setTimeout(() => setPeerTyping(false), 3000);
+      }
+    });
 
     return () => {
       newSocket.disconnect();
@@ -139,8 +182,15 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       groupId,
       ciphertext,
       typingMs,
-      plaintext: textToSend,
+      plaintext: textToSend, // Kept for AI classification per user request
     });
+
+    // Ratchet the key after sending to ensure Forward Secrecy
+    sharedKeyRef.current = ratchetKey(sharedKeyRef.current);
+    
+    // Show Ratchet Indicator briefly
+    setShowRatcheted(true);
+    setTimeout(() => setShowRatcheted(false), 2000);
 
     setMessages(prev => [...prev, msg]);
     setInputText('');
@@ -153,6 +203,9 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       setTypingStartTs(Date.now());
     }
     setInputText(text);
+    if (socket) {
+      socket.emit('user-typing', { groupId });
+    }
   };
 
   const handleShare = (msgId: string, text: string) => {
@@ -162,8 +215,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const confirmShare = async () => {
     if (!shareDialog) return;
     try {
-      // Use the actual mesh API to share the post
-      await mesh.shareToFeed(groupId, shareDialog.msgId, shareDialog.text, userId);
+      await mesh.shareToFeed(groupId, shareDialog.msgId, shareDialog.text, userId || undefined);
     } catch (err) {
       console.error('Failed to share message', err);
     } finally {
@@ -176,11 +228,11 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       <KeyboardAvoidingView 
         style={styles.container} 
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>‹ Back</Text>
+            <Text style={styles.backButtonText}>←</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
           <View style={styles.headerRight} />
@@ -194,18 +246,28 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             <MessageBubble
               message={item}
               isOwn={item.fromId === userId}
+              senderTier={item.senderTier}
               onShare={() => handleShare(item.msgId, item.text)}
             />
           )}
           style={styles.messageList}
-          data-testid="chat-message-list"
+          testID="chat-message-list"
+          ListFooterComponent={
+            peerTyping ? <Text style={styles.typingIndicator}>... typing</Text> : null
+          }
         />
 
-        {!keysReady && (
-          <View style={styles.keysOverlay}>
-            <Text style={styles.keysText}>Establishing secure connection...</Text>
+        {showRatcheted && (
+          <View style={styles.ratchetOverlay}>
+            <Text style={styles.ratchetText}>🔑 Key Ratcheted</Text>
           </View>
         )}
+
+        <View style={styles.statusOverlay}>
+          <Text style={[styles.statusText, keysReady ? styles.statusReady : styles.statusWaiting]}>
+            {keysReady ? 'ECDH Key Exchange Complete ✓' : 'Waiting for peer keys...'}
+          </Text>
+        </View>
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -213,19 +275,20 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             value={inputText}
             onChangeText={handleTextChange}
             placeholder="Message"
+            placeholderTextColor="#566178"
             maxLength={5000}
             editable={keysReady}
             multiline
-            data-testid="chat-input"
+            testID="chat-input"
           />
           <TouchableOpacity
-            style={[styles.sendButton, !inputText.trim() && styles.sendDisabled]}
+            style={[styles.sendButton, (!inputText.trim() || !keysReady) && styles.sendDisabled]}
             onPress={handleSend}
             disabled={!inputText.trim() || !keysReady}
             accessibilityLabel="Send message"
-            data-testid="chat-send-button"
+            testID="chat-send-button"
           >
-            <Text style={styles.sendText}>↑</Text>
+            <Text style={[styles.sendText, (!inputText.trim() || !keysReady) && styles.sendTextDisabled]}>✈</Text>
           </TouchableOpacity>
         </View>
 
@@ -243,19 +306,25 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#6200EE' },
-  container: { flex: 1, backgroundColor: '#FAFAFA' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#6200EE', elevation: 4 },
+  safeArea: { flex: 1, backgroundColor: '#0c1018' },
+  container: { flex: 1, backgroundColor: '#0c1018' },
+  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#0e131d', borderBottomWidth: 1, borderBottomColor: '#283347' },
   backButton: { marginRight: 16, paddingVertical: 4 },
-  backButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#FFF', textAlign: 'center' },
+  backButtonText: { color: '#6d8cff', fontSize: 24, fontWeight: '600' },
+  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#e8edf6', textAlign: 'center' },
   headerRight: { width: 50 }, // For balancing the title
-  messageList: { flex: 1, paddingVertical: 8 },
-  inputContainer: { flexDirection: 'row', padding: 12, paddingBottom: 16, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E0E0E0', alignItems: 'flex-end' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#E0E0E0', borderRadius: 20, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16, maxHeight: 100 },
-  sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#6200EE', justifyContent: 'center', alignItems: 'center', marginLeft: 12, marginBottom: 2 },
-  sendDisabled: { backgroundColor: '#CCC' },
+  messageList: { flex: 1, paddingVertical: 8, backgroundColor: '#0c1018' },
+  inputContainer: { flexDirection: 'row', padding: 12, paddingBottom: 16, backgroundColor: '#1c2433', borderTopWidth: 1, borderTopColor: '#283347', alignItems: 'flex-end' },
+  input: { flex: 1, borderWidth: 1, borderColor: '#283347', borderRadius: 20, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16, maxHeight: 100, color: '#e8edf6' },
+  sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#6d8cff', justifyContent: 'center', alignItems: 'center', marginLeft: 12, marginBottom: 2 },
+  sendDisabled: { backgroundColor: '#1c2433', borderWidth: 1, borderColor: '#283347' },
   sendText: { color: '#FFF', fontSize: 20, fontWeight: '700' },
-  keysOverlay: { position: 'absolute', top: 60, left: 0, right: 0, padding: 12, backgroundColor: '#FFF3E0', alignItems: 'center' },
-  keysText: { color: '#E65100', fontSize: 14 },
+  sendTextDisabled: { color: '#566178' },
+  statusOverlay: { padding: 4, backgroundColor: '#0e131d', alignItems: 'center' },
+  statusText: { fontSize: 12, fontWeight: '600' },
+  statusReady: { color: '#43d17a' },
+  statusWaiting: { color: '#ffc66b' },
+  ratchetOverlay: { position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' },
+  ratchetText: { backgroundColor: 'rgba(109,140,255,0.2)', color: '#6d8cff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, fontSize: 12, overflow: 'hidden' },
+  typingIndicator: { color: '#566178', fontSize: 14, fontStyle: 'italic', paddingHorizontal: 16, paddingVertical: 8 },
 });

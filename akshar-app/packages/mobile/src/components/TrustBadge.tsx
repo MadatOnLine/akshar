@@ -11,10 +11,10 @@ interface TrustBadgeProps {
 }
 
 const TIER_COLORS: Record<string, string> = {
-  'Trusted Human': '#4CAF50',
-  'Likely Human': '#2196F3',
-  'Provisional': '#FF9800',
-  'Low Trust / Suspect': '#F44336',
+  'Trusted Human': '#43d17a',
+  'Likely Human': '#6d8cff',
+  'Provisional': '#ffc66b',
+  'Low Trust / Suspect': '#ff6b6b',
 };
 
 const TIER_LABELS: Record<string, string> = {
@@ -29,13 +29,22 @@ export function TrustBadge({ tier, size = 'small' }: TrustBadgeProps) {
   const label = TIER_LABELS[tier] || tier;
   const isSmall = size === 'small';
 
+  // 15% opacity background from the solid color
+  const bgColor = color + '26'; // hex 26 ≈ 15% opacity
+
   return (
     <View
-      style={[styles.badge, { backgroundColor: color }, isSmall && styles.badgeSmall]}
+      style={[
+        styles.badge,
+        { backgroundColor: bgColor },
+        isSmall && styles.badgeSmall,
+      ]}
       accessibilityLabel={`Trust tier: ${tier}`}
-      data-testid="trust-badge"
+      testID="trust-badge"
     >
-      <Text style={[styles.text, isSmall && styles.textSmall]}>{label}</Text>
+      <Text style={[styles.text, { color }, isSmall && styles.textSmall]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -52,7 +61,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   text: {
-    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
   },

@@ -26,7 +26,7 @@ export function ConfirmDialog({
   return (
     <Modal visible={visible} transparent animationType="fade">
       <View style={styles.overlay}>
-        <View style={styles.dialog} data-testid="confirm-dialog">
+        <View style={styles.dialog} testID="confirm-dialog">
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttons}>
@@ -34,7 +34,7 @@ export function ConfirmDialog({
               style={[styles.button, styles.cancelButton]}
               onPress={onCancel}
               accessibilityLabel={cancelText}
-              data-testid="confirm-dialog-cancel"
+              testID="confirm-dialog-cancel"
             >
               <Text style={styles.cancelText}>{cancelText}</Text>
             </TouchableOpacity>
@@ -42,7 +42,7 @@ export function ConfirmDialog({
               style={[styles.button, styles.confirmButton]}
               onPress={onConfirm}
               accessibilityLabel={confirmText}
-              data-testid="confirm-dialog-confirm"
+              testID="confirm-dialog-confirm"
             >
               <Text style={styles.confirmText}>{confirmText}</Text>
             </TouchableOpacity>
@@ -56,13 +56,15 @@ export function ConfirmDialog({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   dialog: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1c2433',
+    borderColor: '#283347',
+    borderWidth: 1,
     borderRadius: 16,
     padding: 24,
     width: '100%',
@@ -71,12 +73,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: '#e8edf6',
     marginBottom: 8,
   },
   message: {
     fontSize: 14,
-    color: '#666',
+    color: '#8b97ad',
     lineHeight: 20,
     marginBottom: 24,
   },
@@ -93,15 +95,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelButton: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#243044',
   },
   confirmButton: {
-    backgroundColor: '#6200EE',
+    backgroundColor: '#6d8cff',
   },
   cancelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#666',
+    color: '#8b97ad',
   },
   confirmText: {
     fontSize: 14,

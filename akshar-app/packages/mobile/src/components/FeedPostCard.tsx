@@ -15,10 +15,16 @@ interface FeedPostCardProps {
 }
 
 export function FeedPostCard({ post, sharerTier, onLike, onDislike, onShare }: FeedPostCardProps) {
+  const displayName = post.sharerName || post.sharerId.slice(0, 8) + '...';
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+
   return (
-    <View style={styles.card} data-testid={`feed-post-${post.postId}`}>
+    <View style={styles.card} testID={`feed-post-${post.postId}`}>
       <View style={styles.header}>
-        <Text style={styles.sharerName}>{post.sharerId}</Text>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>{avatarLetter}</Text>
+        </View>
+        <Text style={styles.sharerName}>{displayName}</Text>
         {sharerTier && <TrustBadge tier={sharerTier} size="small" />}
       </View>
       {post.originalAuthorId !== post.sharerId && (
@@ -32,7 +38,7 @@ export function FeedPostCard({ post, sharerTier, onLike, onDislike, onShare }: F
           onPress={onLike}
           style={styles.reactionButton}
           accessibilityLabel="Like post"
-          data-testid="feed-like-button"
+          testID="feed-like-button"
         >
           <Text style={styles.reactionText}>👍 {post.likes}</Text>
         </TouchableOpacity>
@@ -40,7 +46,7 @@ export function FeedPostCard({ post, sharerTier, onLike, onDislike, onShare }: F
           onPress={onDislike}
           style={styles.reactionButton}
           accessibilityLabel="Dislike post"
-          data-testid="feed-dislike-button"
+          testID="feed-dislike-button"
         >
           <Text style={styles.reactionText}>👎 {post.dislikes}</Text>
         </TouchableOpacity>
@@ -48,7 +54,7 @@ export function FeedPostCard({ post, sharerTier, onLike, onDislike, onShare }: F
           onPress={onShare}
           style={styles.reactionButton}
           accessibilityLabel="Share post"
-          data-testid="feed-share-button"
+          testID="feed-share-button"
         >
           <Text style={styles.reactionText}>🔄 {post.shares}</Text>
         </TouchableOpacity>
@@ -62,16 +68,13 @@ export function FeedPostCard({ post, sharerTier, onLike, onDislike, onShare }: F
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1c2433',
+    borderColor: '#283347',
+    borderWidth: 1,
     padding: 16,
     marginHorizontal: 12,
     marginVertical: 6,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: 14,
   },
   header: {
     flexDirection: 'row',
@@ -79,20 +82,33 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 4,
   },
+  avatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#6d8cff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   sharerName: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: '#e8edf6',
   },
   attribution: {
     fontSize: 12,
-    color: '#666',
+    color: '#566178',
     marginBottom: 8,
   },
   content: {
     fontSize: 16,
     lineHeight: 24,
-    color: '#1A1A1A',
+    color: '#e8edf6',
     marginBottom: 12,
   },
   reactions: {
@@ -104,7 +120,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 20,
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#243044',
     minWidth: 44,
     minHeight: 44,
     justifyContent: 'center',
@@ -112,9 +128,10 @@ const styles = StyleSheet.create({
   },
   reactionText: {
     fontSize: 14,
+    color: '#e8edf6',
   },
   timestamp: {
     fontSize: 11,
-    color: '#999',
+    color: '#566178',
   },
 });
