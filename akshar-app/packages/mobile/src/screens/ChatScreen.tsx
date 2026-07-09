@@ -96,14 +96,19 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       if (data.groupId !== groupId) return;
       
       const decryptedMessages: DecryptedMessage[] = data.messages.map(msg => {
-        let text = '[Decryption Failed]';
+        let text = msg.ciphertext?.val || msg.val || 'encrypted data';
+        let decryptionFailed = true;
         if (sharedKeyRef.current) {
-           text = decrypt(
+          const dec = decrypt(
             sharedKeyRef.current,
             msg.ciphertext?.nonce || msg.nonce,
             msg.ciphertext?.tag || msg.tag,
             msg.ciphertext?.val || msg.val
-          ) || '[Decryption Failed]';
+          );
+          if (dec) {
+            text = dec;
+            decryptionFailed = false;
+          }
         }
         
         return {
@@ -114,6 +119,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
           ts: msg.ts,
           classification: msg.classification,
           senderTier: msg.classification?.tier,
+          decryptionFailed,
         };
       });
       
@@ -124,18 +130,23 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     newSocket.on('new-message', (msg: any) => {
       if (msg.toNode !== groupId) return;
       
-      let text = '[Decryption Failed]';
+      let text = msg.ciphertext?.val || msg.val || 'encrypted data';
+      let decryptionFailed = true;
       if (sharedKeyRef.current) {
-        text = decrypt(
+        const dec = decrypt(
           sharedKeyRef.current,
           msg.ciphertext?.nonce || msg.nonce,
           msg.ciphertext?.tag || msg.tag,
           msg.ciphertext?.val || msg.val
-        ) || '[Decryption Failed]';
+        );
+        if (dec) {
+          text = dec;
+          decryptionFailed = false;
+        }
       }
       
       setMessages(prev => {
-        if (prev.some(p => p.msgId === msg.msgId || (p.text === text && p.fromId === userId && Math.abs(p.ts - msg.ts) < 5000))) return prev;
+        if (prev.some(p => p.msgId === msg.msgId || (!p.decryptionFailed && p.text === text && p.fromId === userId && Math.abs(p.ts - msg.ts) < 5000))) return prev;
         
         const newMsg: DecryptedMessage = {
           msgId: msg.msgId,
@@ -145,6 +156,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
           ts: msg.ts,
           classification: msg.classification,
           senderTier: msg.classification?.tier,
+          decryptionFailed,
         };
         return [...prev, newMsg];
       });

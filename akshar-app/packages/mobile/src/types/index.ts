@@ -20,6 +20,7 @@ export interface DecryptedMessage {
     confidence: number;
     pAI?: number;
   };
+  decryptionFailed?: boolean;
 }
 
 export interface Group {

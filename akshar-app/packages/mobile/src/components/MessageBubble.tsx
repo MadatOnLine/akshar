@@ -37,8 +37,17 @@ export function MessageBubble({ message, isOwn, senderTier, onShare }: MessageBu
           {senderTier && <TrustBadge tier={senderTier} size="small" />}
         </View>
       )}
-      <View style={[styles.bubble, bubbleStyle]}>
-        <Text style={styles.text}>{message.text}</Text>
+      <View style={[styles.bubble, bubbleStyle, message.decryptionFailed && styles.failedBubble]}>
+        {message.decryptionFailed ? (
+          <View style={styles.failedContainer}>
+            <Text style={styles.failedIcon}>🔒</Text>
+            <Text style={styles.failedText} numberOfLines={1}>
+              {message.text}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.text}>{message.text}</Text>
+        )}
       </View>
       <View style={styles.footer}>
         <Text style={styles.time}>
@@ -138,5 +147,24 @@ const styles = StyleSheet.create({
   },
   shareIcon: {
     fontSize: 12,
+  },
+  failedBubble: {
+    backgroundColor: '#121722',
+    borderColor: '#1f2937',
+    borderStyle: 'dashed',
+  },
+  failedContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  failedIcon: {
+    fontSize: 12,
+  },
+  failedText: {
+    fontSize: 14,
+    color: '#566178',
+    fontStyle: 'italic',
+    maxWidth: 150,
   },
 });
