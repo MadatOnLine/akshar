@@ -242,6 +242,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     if (!shareDialog) return;
     try {
       await mesh.shareToFeed(groupId, shareDialog.msgId, shareDialog.text, userId || undefined);
+      Alert.alert('Shared!', 'Message posted to the public feed.');
     } catch (err: any) {
       console.error('Failed to share message', err);
       Alert.alert('Share Failed', err.message || 'Unknown error occurred');
