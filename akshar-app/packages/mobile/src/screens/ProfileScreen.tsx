@@ -28,6 +28,8 @@ export function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [trust, setTrust] = useState<TrustState | null>(null);
 
+  const [error, setError] = useState<string | null>(null);
+
   useEffect(() => {
     if (userId) {
       loadProfile();
@@ -36,14 +38,16 @@ export function ProfileScreen() {
 
   const loadProfile = async () => {
     try {
+      setError(null);
       const [profileResult, trustResult] = await Promise.all([
         auth.getProfile(userId!),
         ai.getTrust(userId!),
       ]);
       setProfile(profileResult);
       setTrust(trustResult);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load profile:', err);
+      setError(err.message || 'Failed to load profile');
     }
   };
 
@@ -54,7 +58,16 @@ export function ProfileScreen() {
   if (!profile) {
     return (
       <View style={styles.container}>
-        <Text style={styles.loading}>Loading profile...</Text>
+        {error ? (
+          <View style={{ marginTop: 48, alignItems: 'center' }}>
+            <Text style={{ color: '#ff6b6b', marginBottom: 20 }}>{error}</Text>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Force Logout</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <Text style={styles.loading}>Loading profile...</Text>
+        )}
       </View>
     );
   }
