@@ -9,37 +9,42 @@ import * as groupService from '../services/groups.js';
 export const feedRouter = Router();
 
 feedRouter.post('/mesh/share', requireAuth, async (req: Request, res: Response) => {
-  const userId = (req as any).userId;
-  const { groupId, messageId, plaintext, originalAuthorId } = req.body;
+  try {
+    const userId = (req as any).userId;
+    const { groupId, messageId, plaintext, originalAuthorId } = req.body;
 
-  if (!groupId || !messageId || !plaintext) {
-    res.status(400).json({ ok: false, error: 'groupId, messageId, and plaintext are required' });
-    return;
+    if (!groupId || !messageId || !plaintext) {
+      res.status(400).json({ ok: false, error: 'groupId, messageId, and plaintext are required' });
+      return;
+    }
+
+    // Check membership
+    const isMember = await groupService.isMember(groupId, userId);
+    if (!isMember) {
+      res.status(403).json({ ok: false, error: 'Not a member of this group' });
+      return;
+    }
+
+    // Check not sealed
+    const group = await groupService.getGroup(groupId);
+    if (group?.sealed) {
+      res.status(403).json({ ok: false, error: 'This group does not allow sharing' });
+      return;
+    }
+
+    const post = await feedService.shareToFeed(
+      userId,
+      originalAuthorId || userId,
+      groupId,
+      messageId,
+      plaintext
+    );
+
+    res.status(201).json({ ok: true, post });
+  } catch (err: any) {
+    console.error('Share to feed error:', err);
+    res.status(500).json({ ok: false, error: 'Internal server error during share' });
   }
-
-  // Check membership
-  const isMember = await groupService.isMember(groupId, userId);
-  if (!isMember) {
-    res.status(403).json({ ok: false, error: 'Not a member of this group' });
-    return;
-  }
-
-  // Check not sealed
-  const group = await groupService.getGroup(groupId);
-  if (group?.sealed) {
-    res.status(403).json({ ok: false, error: 'This group does not allow sharing' });
-    return;
-  }
-
-  const post = await feedService.shareToFeed(
-    userId,
-    originalAuthorId || userId,
-    groupId,
-    messageId,
-    plaintext
-  );
-
-  res.status(201).json({ ok: true, post });
 });
 
 feedRouter.get('/mesh/feed', requireAuth, async (req: Request, res: Response) => {

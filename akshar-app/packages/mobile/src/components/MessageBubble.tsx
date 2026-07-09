@@ -143,10 +143,14 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     marginLeft: 4,
-    padding: 2,
+    padding: 8,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   shareIcon: {
-    fontSize: 12,
+    fontSize: 16,
   },
   failedBubble: {
     backgroundColor: '#121722',
