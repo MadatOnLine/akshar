@@ -13,6 +13,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { MessageBubble } from '../components/MessageBubble';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -241,8 +242,9 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     if (!shareDialog) return;
     try {
       await mesh.shareToFeed(groupId, shareDialog.msgId, shareDialog.text, userId || undefined);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to share message', err);
+      Alert.alert('Share Failed', err.message || 'Unknown error occurred');
     } finally {
       setShareDialog(null);
     }
