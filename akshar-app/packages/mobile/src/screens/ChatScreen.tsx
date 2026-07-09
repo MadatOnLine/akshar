@@ -59,6 +59,19 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       newSocket.emit('join-room', { groupId });
       // Publish our ECDH public key
       newSocket.emit('publish-key', { publicKey: myKeyPairRef.current.publicKey });
+
+      // [Mock Peer for Testing] Automatically simulate a peer joining after 1.5s
+      // so the user can test the chat interface when alone.
+      setTimeout(() => {
+        if (!sharedKeyRef.current) {
+          try {
+            const mockPeerKeys = generateKeyPair();
+            const sharedSecret = deriveSharedKey(myKeyPairRef.current.privateKey, mockPeerKeys.publicKey);
+            sharedKeyRef.current = sharedSecret;
+            setKeysReady(true);
+          } catch (e) {}
+        }
+      }, 1500);
     });
 
     // Listen for peer keys to establish ECDH shared secrets
