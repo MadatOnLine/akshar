@@ -131,23 +131,40 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     newSocket.on('new-message', (msg: any) => {
       if (msg.toNode !== groupId) return;
       
-      let text = msg.ciphertext?.val || msg.val || 'encrypted data';
-      let decryptionFailed = true;
-      if (sharedKeyRef.current) {
-        const dec = decrypt(
-          sharedKeyRef.current,
-          msg.ciphertext?.nonce || msg.nonce,
-          msg.ciphertext?.tag || msg.tag,
-          msg.ciphertext?.val || msg.val
-        );
-        if (dec) {
-          text = dec;
-          decryptionFailed = false;
-        }
-      }
-      
+      const incomingNonce = msg.ciphertext?.nonce || msg.nonce;
+
       setMessages(prev => {
-        if (prev.some(p => p.msgId === msg.msgId || (!p.decryptionFailed && p.text === text && p.fromId === userId && Math.abs(p.ts - msg.ts) < 5000))) return prev;
+        // Find if this is an echo of our own message by matching the nonce
+        const isEcho = prev.findIndex(p => p.nonce === incomingNonce);
+        if (isEcho !== -1) {
+          // Update the local message with the server's msgId and classification
+          const updated = [...prev];
+          updated[isEcho] = {
+            ...updated[isEcho],
+            msgId: msg.msgId,
+            ts: msg.ts,
+            classification: msg.classification,
+            senderTier: msg.classification?.tier,
+          };
+          return updated;
+        }
+
+        let text = msg.ciphertext?.val || msg.val || 'encrypted data';
+        let decryptionFailed = true;
+        if (sharedKeyRef.current) {
+          const dec = decrypt(
+            sharedKeyRef.current,
+            msg.ciphertext?.nonce || msg.nonce,
+            msg.ciphertext?.tag || msg.tag,
+            msg.ciphertext?.val || msg.val
+          );
+          if (dec) {
+            text = dec;
+            decryptionFailed = false;
+          }
+        }
+        
+        if (prev.some(p => p.msgId === msg.msgId)) return prev;
         
         const newMsg: DecryptedMessage = {
           msgId: msg.msgId,
@@ -158,6 +175,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
           classification: msg.classification,
           senderTier: msg.classification?.tier,
           decryptionFailed,
+          nonce: incomingNonce,
         };
         return [...prev, newMsg];
       });
@@ -194,15 +212,16 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     const ts = Date.now();
     const tempMsgId = `msg-${ts}`;
     
+    const ciphertext = encrypt(sharedKeyRef.current, textToSend);
+
     const msg: DecryptedMessage = {
       msgId: tempMsgId,
       from: 'You',
       fromId: userId || '',
       text: textToSend,
       ts: ts,
+      nonce: ciphertext.nonce, // Attach nonce for deduplication
     };
-
-    const ciphertext = encrypt(sharedKeyRef.current, textToSend);
 
     socket.emit('send-message', {
       groupId,

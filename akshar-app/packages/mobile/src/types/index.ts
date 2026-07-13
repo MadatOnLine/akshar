@@ -21,6 +21,7 @@ export interface DecryptedMessage {
     pAI?: number;
   };
   decryptionFailed?: boolean;
+  nonce?: string;
 }
 
 export interface Group {
@@ -86,4 +87,23 @@ export type MainTabParamList = {
   Groups: undefined;
   Feed: undefined;
   Profile: undefined;
+  Admin: undefined;
 };
+
+export interface DashboardMetrics {
+  ok: boolean;
+  totalUsers: number;
+  usersByTier: {
+    larva: number;
+    drone: number;
+    colony: number;
+  };
+  flaggedAccounts: {
+    userId: string;
+    trust: number;
+    tier: string;
+  }[];
+  flaggedConversations: any[];
+  botCount: number;
+  humanCount: number;
+}

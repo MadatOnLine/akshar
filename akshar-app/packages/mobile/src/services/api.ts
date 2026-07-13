@@ -83,8 +83,10 @@ export const ai = {
   getTrust: (userId: string) =>
     request<any>(`${config.aiUrl}/ai/trust/${userId}`),
 
-  getDashboard: () =>
-    request<any>(`${config.aiUrl}/ai/dashboard`),
+  getDashboard: (serviceKey: string = 'akshar-internal-dev-key') =>
+    request<any>(`${config.aiUrl}/ai/dashboard`, {
+      headers: { 'x-service-key': serviceKey },
+    }),
 };
 
 // --- Mesh API ---

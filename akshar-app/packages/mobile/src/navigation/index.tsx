@@ -13,7 +13,7 @@ import { GroupListScreen } from '../screens/GroupListScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { FeedScreen } from '../screens/FeedScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
-
+import { ModeratorScreen } from '../screens/ModeratorScreen';
 import type { RootStackParamList, AuthStackParamList, MainTabParamList } from '../types';
 
 const AuthStack = createStackNavigator<AuthStackParamList>();
@@ -93,6 +93,15 @@ function MainTabs() {
           tabBarLabel: 'Profile',
           tabBarIcon: ({ color }) => <TabIcon emoji="👤" color={color} />,
           tabBarTestID: 'tab-profile',
+        }}
+      />
+      <Tab.Screen
+        name="Admin"
+        component={ModeratorScreen}
+        options={{
+          tabBarLabel: 'Admin',
+          tabBarIcon: ({ color }) => <TabIcon emoji="🛡️" color={color} />,
+          tabBarTestID: 'tab-admin',
         }}
       />
     </Tab.Navigator>

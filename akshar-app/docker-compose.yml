@@ -46,7 +46,9 @@ services:
       - huggingface_cache:/root/.cache/huggingface
 
   mesh:
-    build: ./packages/mesh
+    build:
+      context: .
+      dockerfile: packages/mesh/Dockerfile
     ports:
       - "8003:8003"
     environment:
