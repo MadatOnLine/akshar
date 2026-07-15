@@ -11,6 +11,11 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js",
       "types": "./dist/esm/index.d.ts"
+    },
+    "./face-hash": {
+      "import": "./dist/esm/face-hash.js",
+      "require": "./dist/cjs/face-hash.js",
+      "types": "./dist/esm/face-hash.d.ts"
     }
   },
   "react-native": {

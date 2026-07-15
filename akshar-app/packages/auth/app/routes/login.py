@@ -14,7 +14,9 @@ async def face_login(body: FaceLoginRequest, request: Request):
     """Authenticate via face hash comparison."""
     client_ip = request.client.host if request.client else "unknown"
     try:
-        result = await auth_service.face_login(body.faceHash, body.deviceId, client_ip)
+        result = await auth_service.face_login(
+            body.faceHash, body.deviceId, client_ip, liveness_passed=body.livenessPassed
+        )
         return {"ok": True, **result}
     except ValueError as e:
         raise HTTPException(status_code=401, detail=str(e))

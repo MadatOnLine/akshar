@@ -1,5 +1,7 @@
 import 'react-native-get-random-values';
 import React from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './providers/AuthProvider';
 import { AppNavigation } from './navigation';
 import { setCryptoProvider, MobileCryptoProvider } from '@akshar/crypto';
@@ -17,8 +19,12 @@ setCryptoProvider(new MobileCryptoProvider());
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppNavigation />
-    </AuthProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <AppNavigation />
+        </AuthProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

@@ -20,6 +20,9 @@ COUCHDB_USER: str = os.getenv("COUCHDB_USER", "admin")
 COUCHDB_PASSWORD: str = os.getenv("COUCHDB_PASSWORD", "admin")
 COUCHDB_DATABASE: str = os.getenv("COUCHDB_DATABASE", "akshar_users")
 COUCHDB_TRUST_DB: str = os.getenv("COUCHDB_TRUST_DB", "akshar_trust")
+COUCHDB_FEED_DB: str = os.getenv("COUCHDB_FEED_DB", "akshar_feed")
+COUCHDB_VAULT_DB: str = os.getenv("COUCHDB_VAULT_DB", "akshar_vault")
+COUCHDB_GROUPS_DB: str = os.getenv("COUCHDB_GROUPS_DB", "akshar_groups")
 
 # --- JWT ---
 JWT_SECRET: str = os.getenv("JWT_SECRET", "change-me-in-production-minimum-32-chars!")
@@ -30,9 +33,15 @@ REFRESH_EXPIRY_DAYS: int = int(os.getenv("REFRESH_EXPIRY_DAYS", "30"))
 # --- Face Matching ---
 FACE_MATCH_THRESHOLD: int = int(os.getenv("FACE_MATCH_THRESHOLD", "14"))
 
+# --- Risk verification (Tier 2b step-up) ---
+RISK_TRUST_THRESHOLD: int = int(os.getenv("RISK_TRUST_THRESHOLD", "1000"))
+RISK_REPORT_COUNT_THRESHOLD: int = int(os.getenv("RISK_REPORT_COUNT_THRESHOLD", "3"))
+REPORTER_MIN_TRUST_SCORE: int = int(os.getenv("REPORTER_MIN_TRUST_SCORE", "4000"))
+
 # --- Liveness ---
 LIVENESS_TIMEOUT: int = int(os.getenv("LIVENESS_TIMEOUT", "15"))
 LIVENESS_MAX_RETRIES: int = int(os.getenv("LIVENESS_MAX_RETRIES", "3"))
+LIVENESS_MIN_ELAPSED: float = float(os.getenv("LIVENESS_MIN_ELAPSED", "1.0"))
 
 # --- Rate Limiting ---
 RATE_LIMIT_MAX_ATTEMPTS: int = int(os.getenv("RATE_LIMIT_MAX_ATTEMPTS", "5"))
@@ -44,6 +53,14 @@ ENROLLMENT_TIMEOUT: int = int(os.getenv("ENROLLMENT_TIMEOUT", "300"))
 
 # --- Trust ---
 TIER0_BASE_TRUST: int = int(os.getenv("TIER0_BASE_TRUST", "1000"))
+
+# --- Tier-2 (person-binding / periodic re-auth) ---
+TIER2_REAUTH_INTERVAL_SEC: int = int(os.getenv("TIER2_REAUTH_INTERVAL_SEC", "120"))
+TIER2_FACE_MATCH_THRESHOLD: int = int(os.getenv("TIER2_FACE_MATCH_THRESHOLD", "14"))
+TIER2_BOOST_HUMANNESS: float = float(os.getenv("TIER2_BOOST_HUMANNESS", "0.85"))
+TIER2_OVERDUE_HUMANNESS: float = float(os.getenv("TIER2_OVERDUE_HUMANNESS", "0.15"))
+AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://127.0.0.1:8002")
+SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "akshar-internal-dev-key")
 
 # Constants mirrored from packages/ai/app/config.py — keep in sync for Tier-0 seeding.
 _TRUST_MAX = 10_000

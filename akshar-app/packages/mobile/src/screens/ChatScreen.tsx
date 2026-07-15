@@ -24,10 +24,10 @@ import io from 'socket.io-client';
 import { config } from '../config';
 import { encrypt, decrypt, generateKeyPair, deriveSharedKey, ratchetKey, toHex } from '@akshar/crypto';
 
-interface ChatScreenProps {
-  route: { params: { groupId: string; groupName: string } };
-  navigation: any;
-}
+import type { StackScreenProps } from '@react-navigation/stack';
+import type { RootStackParamList } from '../types';
+
+type ChatScreenProps = StackScreenProps<RootStackParamList, 'Chat'>;
 
 export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { userId } = useAuth();

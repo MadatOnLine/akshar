@@ -44,9 +44,14 @@ class CouchClient:
 
     async def put(self, doc_id: str, doc: dict[str, Any]) -> dict[str, Any]:
         """Create or update a document."""
+        payload = dict(doc)
+        if "_rev" not in payload:
+            existing = await self.get(doc_id)
+            if existing and existing.get("_rev"):
+                payload["_rev"] = existing["_rev"]
         resp = await self.client.put(
             f"{self._base}/{doc_id}",
-            json=doc,
+            json=payload,
         )
         resp.raise_for_status()
         return resp.json()

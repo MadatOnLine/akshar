@@ -13,7 +13,7 @@ from app.db.couch_client import db
 from app.middleware.error_handler import ErrorHandlerMiddleware
 from app.middleware.security_headers import SecurityHeadersMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
-from app.routes import enrollment, login, session, profile
+from app.routes import enrollment, login, session, profile, tier2, studio
 
 
 # --- Structured JSON logging ---
@@ -65,6 +65,8 @@ app.include_router(enrollment.router)
 app.include_router(login.router)
 app.include_router(session.router)
 app.include_router(profile.router)
+app.include_router(tier2.router)
+app.include_router(studio.router)
 
 
 @app.get("/auth/health")

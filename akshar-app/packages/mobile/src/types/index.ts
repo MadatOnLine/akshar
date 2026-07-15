@@ -72,11 +72,83 @@ export interface LivenessChallenge {
 
 export type TrustTier = 'Low Trust / Suspect' | 'Provisional' | 'Likely Human' | 'Trusted Human';
 
+export interface Tier2Check {
+  id: string;
+  label: string;
+  score: number;
+  detail: string;
+  pass: boolean;
+}
+
+export interface Tier2State {
+  status: string;
+  verdict: string;
+  humanness: number;
+  lastFaceMatchDistance?: number | null;
+  checks: Tier2Check[];
+  requiresRiskCheck?: boolean;
+  riskReason?: string;
+}
+
+export interface StudioTrust {
+  score: number;
+  tier: string;
+  integrity: { status: string; verdict: string; humanness: number; checks: Tier2Check[] };
+  binding: { status: string; verdict: string; humanness: number; checks: Tier2Check[] };
+}
+
+export interface StudioAnalytics {
+  totals: { posts: number; likes: number; dislikes: number; shares: number; netSentiment: number };
+  posts: Array<{
+    postId: string;
+    content: string;
+    likes: number;
+    dislikes: number;
+    shares: number;
+    engagement: number;
+  }>;
+}
+
+export interface ReportAppeal {
+  status: string;
+  text: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+}
+
+export interface AccountReport {
+  reportId: string;
+  category: string;
+  reason: string;
+  status: string;
+  createdAt?: string;
+  appeal: ReportAppeal;
+}
+
+export interface StudioDashboard {
+  ok: boolean;
+  userId: string;
+  requiresRiskCheck: boolean;
+  riskReason: string;
+  trust: StudioTrust;
+  analytics: StudioAnalytics;
+  reports: AccountReport[];
+}
+
+export interface RiskStatus {
+  requiresRiskCheck: boolean;
+  riskReason: string;
+  trustScore?: number;
+  qualifyingReports?: number;
+}
+
 /* ─── Navigation param lists ─── */
 
 export type RootStackParamList = {
   Home: undefined;
-  Chat: { groupId: string; groupName?: string };
+  Chat: { groupId: string; groupName: string };
+  AccountStudio: undefined;
 };
 
 export type AuthStackParamList = {

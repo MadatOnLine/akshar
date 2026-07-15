@@ -21,14 +21,14 @@ async def enroll(body: EnrollRequest):
 
 @router.post("/enroll-direct")
 async def enroll_direct(body: DirectEnrollRequest):
-    """Direct face enrollment — client-side hybrid liveness already verified.
-
-    Matches the research Proof-of-Human flow: client performs passive + active
-    liveness locally, captures the face hash, then sends it in one call.
-    """
+    """Hybrid face enrollment — client liveness plus server challenge validation."""
     try:
         result = await auth_service.direct_enrollment(
-            body.name, body.deviceId, body.faceHash
+            body.name,
+            body.deviceId,
+            body.faceHash,
+            body.attemptId,
+            body.challengeId,
         )
         return {"ok": True, **result}
     except ValueError as e:

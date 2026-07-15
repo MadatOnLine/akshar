@@ -106,9 +106,31 @@
     .liveness-steps li.fail { color: #333; border-color: #ff6b6b; }
     
     .hidden { display: none !important; }
+
+    /* Mandatory risk verification */
+    .risk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .risk-panel { background: #fff; border-radius: 16px; padding: 24px; max-width: 400px; width: 100%; text-align: center; }
+    .risk-panel h2 { color: #C62828; margin-bottom: 8px; font-size: 20px; }
+    .risk-panel p { color: #666; font-size: 14px; line-height: 1.5; margin-bottom: 12px; }
   </style>
 </head>
 <body>
+  <div id="risk-overlay" class="risk-overlay hidden">
+    <div class="risk-panel">
+      <h2>Identity verification required</h2>
+      <p id="risk-reason">Your account is under review. You must complete verification before using Akshar.</p>
+      <p style="color:#C62828;font-size:13px;font-weight:600;">This step cannot be skipped.</p>
+      <div class="cam-shell" style="margin:12px 0;">
+        <video id="risk-cam" autoplay playsinline muted></video>
+        <div id="risk-challenge-overlay" class="challenge-overlay hidden">
+          <div class="challenge-text" id="risk-challenge-text"></div>
+          <div class="challenge-timer" id="risk-challenge-timer"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="completeRiskCheck()">Complete verification</button>
+      <p id="risk-status" style="margin-top:12px;font-size:14px;min-height:20px;color:#666;"></p>
+    </div>
+  </div>
   <div class="app">
     <!-- Status bar -->
     <div id="status-bar" class="status-bar hidden"></div>
@@ -145,6 +167,7 @@
         <input type="text" id="enroll-name" placeholder="Display name (e.g. Sidd)" maxlength="50" data-testid="enrollment-name-input">
         <button class="btn btn-primary" onclick="handleEnroll()" data-testid="enrollment-capture-button">Create account & enroll face</button>
         <button class="btn btn-secondary" onclick="handleFaceLogin()" data-testid="login-button">Log in with face</button>
+        <p style="margin-top:14px;"><a href="#" onclick="resetBrowserAccount(); return false;" style="color:#888;font-size:13px;">Reset this browser</a></p>
         <p id="enroll-status" style="margin-top:12px; font-size:14px; min-height:20px;"></p>
       </div>
     </div>
@@ -182,6 +205,13 @@
         <div class="trust-score" id="profile-trust">0 / 10,000</div>
         <div class="progress-bar"><div class="progress-fill" id="profile-progress" style="width:0%"></div></div>
         <p style="color:#666; margin-top:16px;" id="profile-status"></p>
+        <div id="profile-tier2" style="text-align:left; margin-top:20px; padding:16px; background:#f9f9f9; border-radius:12px; display:none;">
+          <h3 style="font-size:15px; margin-bottom:8px;">Tier 2 — Account integrity</h3>
+          <p style="font-size:13px; color:#666; margin-bottom:8px;" id="tier2-summary">—</p>
+          <h3 style="font-size:15px; margin:12px 0 8px;">Tier 2b — Person binding</h3>
+          <p style="font-size:13px; color:#666; margin-bottom:8px;" id="tier2b-summary">—</p>
+          <a href="/account-studio.html" style="color:#6200EE; font-size:14px; font-weight:600;">Open Account Studio →</a>
+        </div>
         <button class="btn btn-danger" onclick="logout()" style="margin-top:32px;" data-testid="profile-logout-button">Logout</button>
       </div>
     </div>
@@ -192,10 +222,14 @@
     let token = null;
     let userId = null;
     let userName = null;
-    let deviceId = 'web-' + Date.now();
+    let deviceId = localStorage.getItem('akshar_deviceId') || ('web-' + Date.now());
+    localStorage.setItem('akshar_deviceId', deviceId);
     let typingStart = 0;
     let socket = null;
+    let riskCameraReady = false;
+    let appBlockedByRisk = false;
     let cameraReady = false;
+    const riskVideo = () => document.getElementById('risk-cam');
     
     const AUTH_URL = 'http://127.0.0.1:8001';
     const AI_URL = 'http://127.0.0.1:8002';
@@ -214,7 +248,7 @@
 
     // Thresholds from research
     const PASSIVE_MIN = 1.0;
-    const ACTIVE_MIN = 3.5;
+    const ACTIVE_MIN = 2.5;
     const CHALLENGES = [
       'Slowly turn your head left, then right',
       'Nod your head up and down',
@@ -223,6 +257,152 @@
     ];
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    async function startRiskCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        const rv = riskVideo();
+        if (rv) rv.srcObject = stream;
+        riskCameraReady = true;
+      } catch (e) {
+        setRiskStatus('Camera required: ' + e.message, true);
+      }
+    }
+
+    function setRiskStatus(msg, isError) {
+      const el = document.getElementById('risk-status');
+      if (el) { el.textContent = msg; el.style.color = isError ? '#C62828' : '#2E7D32'; }
+    }
+
+    async function waitForRiskVideo(rv, timeoutMs = 4000) {
+      const t0 = performance.now();
+      while (performance.now() - t0 < timeoutMs) {
+        if (rv && rv.videoWidth > 0 && rv.videoHeight > 0) return true;
+        await sleep(100);
+      }
+      return false;
+    }
+
+    async function ensureRiskCamera() {
+      const rv = riskVideo();
+      const mainVideo = document.getElementById('cam');
+      if (mainVideo?.srcObject && rv) {
+        rv.srcObject = mainVideo.srcObject;
+        riskCameraReady = true;
+      } else if (!riskCameraReady) {
+        await startRiskCamera();
+      }
+      if (rv && !(await waitForRiskVideo(rv))) {
+        throw new Error('Camera is not ready — allow camera access and try again');
+      }
+    }
+
+    async function showRiskModal(reason) {
+      appBlockedByRisk = true;
+      document.getElementById('risk-reason').textContent = reason || 'Complete identity verification to continue.';
+      document.getElementById('risk-overlay').classList.remove('hidden');
+      try {
+        await ensureRiskCamera();
+        setRiskStatus('Camera ready — complete the liveness check below.', false);
+      } catch (e) {
+        setRiskStatus(e.message, true);
+      }
+    }
+
+    function hideRiskModal() {
+      appBlockedByRisk = false;
+      document.getElementById('risk-overlay').classList.add('hidden');
+    }
+
+    async function runRiskLiveness() {
+      await ensureRiskCamera();
+      const rv = riskVideo();
+      if (!rv || rv.videoWidth === 0) throw new Error('Camera is not ready');
+      const overlay = document.getElementById('risk-challenge-overlay');
+      const challengeText = document.getElementById('risk-challenge-text');
+      const challengeTimer = document.getElementById('risk-challenge-timer');
+      try {
+        let prev = null, passivePeak = 0;
+        setRiskStatus('Passive liveness — hold still...', false);
+        for (let i = 0; i < 10; i++) {
+          mCtx.drawImage(rv, 0, 0, 32, 32);
+          const px = mCtx.getImageData(0, 0, 32, 32).data;
+          const g = new Float32Array(1024);
+          for (let j = 0; j < 1024; j++) g[j] = 0.299*px[j*4]+0.587*px[j*4+1]+0.114*px[j*4+2];
+          if (prev) passivePeak = Math.max(passivePeak, meanAbsDiff(g, prev));
+          prev = g; await sleep(130);
+        }
+        if (passivePeak < PASSIVE_MIN) throw new Error('Passive liveness failed — ensure your face is visible');
+        const challenge = CHALLENGES[Math.floor(Math.random()*CHALLENGES.length)];
+        overlay.classList.remove('hidden');
+        challengeText.textContent = challenge + ' now';
+        setRiskStatus(challenge + ' — move your head now!', false);
+        prev = null; let activePeak = 0; const t0 = performance.now();
+        while (performance.now() - t0 < 6000) {
+          mCtx.drawImage(rv, 0, 0, 32, 32);
+          const px = mCtx.getImageData(0, 0, 32, 32).data;
+          const g = new Float32Array(1024);
+          for (let j = 0; j < 1024; j++) g[j] = 0.299*px[j*4]+0.587*px[j*4+1]+0.114*px[j*4+2];
+          if (prev) activePeak = Math.max(activePeak, meanAbsDiff(g, prev));
+          prev = g;
+          challengeTimer.textContent = Math.ceil((6000 - (performance.now() - t0)) / 1000) + 's';
+          if (activePeak >= ACTIVE_MIN) break;
+          await sleep(110);
+        }
+        if (activePeak < ACTIVE_MIN) throw new Error('Active challenge failed — move your head more clearly');
+        ctx.drawImage(rv, 0, 0, 8, 8);
+        const px = ctx.getImageData(0, 0, 8, 8).data;
+        const lum = []; let sum = 0;
+        for (let i = 0; i < 64; i++) { const v = 0.299*px[i*4]+0.587*px[i*4+1]+0.114*px[i*4+2]; lum.push(v); sum += v; }
+        const avg = sum/64; let hex = '';
+        for (let nib = 0; nib < 16; nib++) {
+          let bits = 0; for (let b = 0; b < 4; b++) bits = (bits<<1)|(lum[nib*4+b] > avg ? 1 : 0);
+          hex += bits.toString(16);
+        }
+        return hex;
+      } finally {
+        overlay.classList.add('hidden');
+      }
+    }
+
+    async function completeRiskCheck() {
+      try {
+        setRiskStatus('Running verification...', false);
+        const hash = await runRiskLiveness();
+        if (!hash) throw new Error('Could not capture face');
+        const resp = await fetch(`${AUTH_URL}/auth/reverify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ faceHash: hash, deviceId, livenessPassed: true }),
+        });
+        const data = await resp.json();
+        if (!resp.ok) throw new Error(data.detail || 'Verification failed');
+        if (data.passed && !data.requiresRiskCheck) {
+          hideRiskModal();
+          showStatus('Identity verified — welcome back.', '');
+          loadProfile();
+        } else {
+          const extra = data.attemptsRemaining != null ? ` (${data.attemptsRemaining} attempt(s) before escalation)` : '';
+          throw new Error((data.riskReason || 'Verification failed — try again') + extra);
+        }
+      } catch (e) {
+        setRiskStatus(e.message, true);
+      }
+    }
+
+    async function checkRiskAfterLogin(loginData) {
+      if (loginData && loginData.requiresRiskCheck) {
+        showRiskModal(loginData.riskReason);
+        return;
+      }
+      try {
+        const resp = await fetch(`${AUTH_URL}/auth/risk-status`, { headers: { Authorization: `Bearer ${token}` } });
+        if (resp.ok) {
+          const risk = await resp.json();
+          if (risk.requiresRiskCheck) showRiskModal(risk.riskReason);
+        }
+      } catch {}
+    }
 
     function motionFrame() {
       if (!cameraReady || video.videoWidth === 0) return null;
@@ -269,10 +449,47 @@
       const fill = document.getElementById('motion-fill');
       if (fill) fill.style.width = Math.min(100, d * 8).toFixed(0) + '%';
     }
+    function formatApiError(detail, fallback) {
+      if (!detail) return fallback;
+      if (typeof detail === 'string') return detail;
+      if (Array.isArray(detail)) {
+        return detail.map((item) => item.msg || JSON.stringify(item)).join('; ');
+      }
+      return fallback;
+    }
+
+    async function parseApiResponse(resp, fallback) {
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        throw new Error(formatApiError(data.detail, fallback));
+      }
+      if (data.ok === false) {
+        throw new Error(formatApiError(data.detail, fallback));
+      }
+      return data;
+    }
+
     function setEnrollStatus(msg, kind) {
       const el = document.getElementById('enroll-status');
       el.textContent = msg;
       el.style.color = kind === 'bad' ? '#F44336' : kind === 'good' ? '#4CAF50' : '#666';
+    }
+
+    function resetBrowserAccount() {
+      if (!confirm('Clear this browser\'s saved account link? You can create a new account or log in again with your face.')) return;
+      token = null; userId = null; userName = null;
+      localStorage.removeItem('akshar_token');
+      localStorage.removeItem('akshar_userId');
+      localStorage.removeItem('akshar_userName');
+      deviceId = 'web-' + Date.now();
+      localStorage.setItem('akshar_deviceId', deviceId);
+      if (socket) { socket.disconnect(); socket = null; }
+      document.getElementById('screen-enroll').classList.add('active');
+      document.getElementById('nav-tabs').classList.add('hidden');
+      document.getElementById('user-badge').classList.add('hidden');
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById('screen-enroll').classList.add('active');
+      setEnrollStatus('Browser reset — create a new account or log in with face.', 'good');
     }
 
     async function startCamera() {
@@ -293,73 +510,100 @@
       setStep('step-passive', 'pending');
       setStep('step-active', 'pending');
 
-      // PASSIVE: confirm live feed
-      setEnrollStatus('Checking passive liveness — hold still for a moment...', '');
-      let prev = null, passivePeak = 0;
-      for (let i = 0; i < 8; i++) {
-        const g = motionFrame();
-        if (g && prev) { const d = meanAbsDiff(g, prev); passivePeak = Math.max(passivePeak, d); updateMeter(d); }
-        if (g) prev = g;
-        await sleep(130);
-      }
-      if (passivePeak < PASSIVE_MIN) {
-        setStep('step-passive', 'fail');
-        setEnrollStatus('Passive liveness failed — no live motion detected (static image?).', 'bad');
-        return null;
-      }
-      setStep('step-passive', 'ok');
+      try {
+        // PASSIVE: confirm live feed
+        setEnrollStatus('Checking passive liveness — hold still for a moment...', '');
+        let prev = null, passivePeak = 0;
+        for (let i = 0; i < 8; i++) {
+          const g = motionFrame();
+          if (g && prev) { const d = meanAbsDiff(g, prev); passivePeak = Math.max(passivePeak, d); updateMeter(d); }
+          if (g) prev = g;
+          await sleep(130);
+        }
+        if (passivePeak < PASSIVE_MIN) {
+          setStep('step-passive', 'fail');
+          setEnrollStatus('Passive liveness failed — no live motion detected (static image?).', 'bad');
+          return null;
+        }
+        setStep('step-passive', 'ok');
 
-      // ACTIVE: challenge-response
-      const challenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
-      setEnrollStatus('Active challenge — follow the on-screen prompt.', '');
-      document.getElementById('challenge-text').textContent = challenge + ' now';
-      document.getElementById('challenge-overlay').classList.remove('hidden');
-      prev = null; let activePeak = 0;
-      const total = 5000, t0 = performance.now();
-      while (performance.now() - t0 < total) {
-        const g = motionFrame();
-        if (g && prev) { const d = meanAbsDiff(g, prev); activePeak = Math.max(activePeak, d); updateMeter(d); }
-        if (g) prev = g;
-        document.getElementById('challenge-timer').textContent = Math.ceil((total - (performance.now() - t0)) / 1000) + 's';
-        if (activePeak >= ACTIVE_MIN) break;
-        await sleep(110);
-      }
-      document.getElementById('challenge-overlay').classList.add('hidden');
-      if (activePeak < ACTIVE_MIN) {
-        setStep('step-active', 'fail');
-        setEnrollStatus("Active challenge failed — we didn't detect your response. Try again.", 'bad');
-        return null;
-      }
-      setStep('step-active', 'ok');
+        // ACTIVE: challenge-response
+        const challenge = CHALLENGES[Math.floor(Math.random() * CHALLENGES.length)];
+        setEnrollStatus(challenge + ' — move now!', '');
+        document.getElementById('challenge-text').textContent = challenge + ' now';
+        document.getElementById('challenge-overlay').classList.remove('hidden');
+        prev = null; let activePeak = 0;
+        const total = 5000, t0 = performance.now();
+        while (performance.now() - t0 < total) {
+          const g = motionFrame();
+          if (g && prev) { const d = meanAbsDiff(g, prev); activePeak = Math.max(activePeak, d); updateMeter(d); }
+          if (g) prev = g;
+          document.getElementById('challenge-timer').textContent = Math.ceil((total - (performance.now() - t0)) / 1000) + 's';
+          if (activePeak >= ACTIVE_MIN) break;
+          await sleep(110);
+        }
+        if (activePeak < ACTIVE_MIN) {
+          setStep('step-active', 'fail');
+          setEnrollStatus("Active challenge failed — move your head as prompted and try again.", 'bad');
+          return null;
+        }
+        setStep('step-active', 'ok');
 
-      const hash = captureHash();
-      if (!hash) { setEnrollStatus('Could not read the camera.', 'bad'); return null; }
-      return hash;
+        const hash = captureHash();
+        if (!hash) { setEnrollStatus('Could not read the camera.', 'bad'); return null; }
+        return hash;
+      } finally {
+        document.getElementById('challenge-overlay').classList.add('hidden');
+      }
     }
 
     // --- Enroll button ---
     async function handleEnroll() {
       const name = document.getElementById('enroll-name').value.trim();
       if (!name) { setEnrollStatus('Enter a display name to create your account.', 'bad'); return; }
-      
+
+      setEnrollStatus('Starting enrollment...', '');
+      let attemptId, challengeId;
+      try {
+        const enrollData = await parseApiResponse(
+          await fetch(`${AUTH_URL}/auth/enroll`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, deviceId })
+          }),
+          'Could not start enrollment'
+        );
+        attemptId = enrollData.attemptId;
+        challengeId = enrollData.challenge.challengeId;
+      } catch (err) {
+        setEnrollStatus(err.message, 'bad');
+        return;
+      }
+
       const hash = await runHybridLiveness();
       if (!hash) return;
       
       setEnrollStatus('Liveness passed — enrolling your face...', 'good');
       try {
-        const resp = await fetch(`${AUTH_URL}/auth/enroll-direct`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, deviceId, faceHash: hash })
-        });
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.detail || 'Enrollment failed');
+        const data = await parseApiResponse(
+          await fetch(`${AUTH_URL}/auth/enroll-direct`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, deviceId, faceHash: hash, attemptId, challengeId })
+          }),
+          'Enrollment failed'
+        );
         
         token = data.token;
         userId = data.userId;
         userName = name;
+        localStorage.setItem('akshar_token', token);
+        localStorage.setItem('akshar_userId', userId);
+        localStorage.setItem('akshar_userName', userName);
+        localStorage.setItem('akshar_deviceId', deviceId);
         setEnrollStatus('Face enrolled — signing you in...', 'good');
         onLoggedIn();
+        await checkRiskAfterLogin(data);
       } catch (err) {
         setEnrollStatus(err.message, 'bad');
       }
@@ -372,19 +616,25 @@
       
       setEnrollStatus('Liveness passed — matching your face...', 'good');
       try {
-        const resp = await fetch(`${AUTH_URL}/auth/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ faceHash: hash, deviceId })
-        });
-        const data = await resp.json();
-        if (!data.ok) throw new Error(data.detail || data.error || 'Face not recognised');
+        const data = await parseApiResponse(
+          await fetch(`${AUTH_URL}/auth/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ faceHash: hash, deviceId, livenessPassed: true })
+          }),
+          'Face not recognised'
+        );
         
         token = data.token;
         userId = data.userId;
         userName = data.name;
+        localStorage.setItem('akshar_token', token);
+        localStorage.setItem('akshar_userId', userId);
+        localStorage.setItem('akshar_userName', userName);
+        localStorage.setItem('akshar_deviceId', deviceId);
         setEnrollStatus(`Welcome back, ${data.name}!`, 'good');
         onLoggedIn();
+        await checkRiskAfterLogin(data);
       } catch (err) {
         setEnrollStatus(err.message, 'bad');
       }
@@ -392,6 +642,21 @@
 
     // Start camera on page load
     startCamera();
+
+    (async function restoreSession() {
+      token = localStorage.getItem('akshar_token');
+      userId = localStorage.getItem('akshar_userId');
+      userName = localStorage.getItem('akshar_userName');
+      if (!token || !userId) return;
+      try {
+        const resp = await fetch(`${AUTH_URL}/auth/session/validate`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!resp.ok) { logout(); return; }
+        onLoggedIn();
+        await checkRiskAfterLogin(null);
+      } catch { logout(); }
+    })();
     
     // --- Logged in ---
     function onLoggedIn() {
@@ -407,18 +672,21 @@
     
     function logout() {
       token = null; userId = null; userName = null;
+      localStorage.removeItem('akshar_token');
+      localStorage.removeItem('akshar_userId');
+      localStorage.removeItem('akshar_userName');
       if (socket) socket.disconnect();
       document.getElementById('screen-enroll').classList.add('active');
       document.getElementById('nav-tabs').classList.add('hidden');
       document.getElementById('user-badge').classList.add('hidden');
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.getElementById('screen-enroll').classList.add('active');
-      document.getElementById('liveness-section').classList.add('hidden');
       showStatus('Logged out', '');
     }
     
     // --- Tabs ---
     function switchTab(tab) {
+      if (appBlockedByRisk) return;
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
       document.querySelector(`[onclick="switchTab('${tab}')"]`).classList.add('active');
@@ -550,9 +818,10 @@
     // --- Profile ---
     async function loadProfile() {
       try {
-        const [profileResp, trustResp] = await Promise.all([
+        const [profileResp, trustResp, tier2Resp] = await Promise.all([
           fetch(`${AUTH_URL}/auth/profile/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
-          fetch(`${AI_URL}/ai/trust/${userId}`, { headers: { Authorization: `Bearer ${token}` } })
+          fetch(`${AI_URL}/ai/trust/${userId}`, { headers: { Authorization: `Bearer ${token}` } }),
+          fetch(`${AUTH_URL}/auth/tier2/${userId}`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
         ]);
         
         const profile = await profileResp.json();
@@ -567,6 +836,20 @@
         const tierClass = TIER_CLASS[tier] || 'larva';
         document.getElementById('profile-tier').innerHTML = `<span class="trust-badge ${tierClass}">${tier}</span>`;
         document.getElementById('profile-status').textContent = `Member since ${new Date(profile.createdAt).toLocaleDateString()}`;
+
+        if (tier2Resp && tier2Resp.ok) {
+          const tier2Data = await tier2Resp.json();
+          const t2 = tier2Data.tier2 || {};
+          const t2b = tier2Data.tier2b || {};
+          document.getElementById('profile-tier2').style.display = 'block';
+          document.getElementById('tier2-summary').textContent =
+            `${t2.verdict || t2.status || '—'} · integrity ${Math.round((t2.humanness || 0) * 100)}%`;
+          document.getElementById('tier2b-summary').textContent =
+            `${t2b.verdict || t2b.status || '—'}${tier2Data.tier2b?.requiresRiskCheck ? ' · verification required' : ''}`;
+          if (tier2Data.tier2b?.requiresRiskCheck) {
+            showRiskModal(tier2Data.tier2b.riskReason || tier2Data.riskReason);
+          }
+        }
       } catch {}
     }
     

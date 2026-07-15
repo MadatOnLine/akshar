@@ -16,6 +16,9 @@ def test_build_initial_trust_doc():
     assert doc["type"] == "trust"
     assert doc["history"] == [TIER0_BASE_TRUST]
     assert doc["evidence"] == pytest.approx(tier0_evidence(), rel=1e-6)
+    assert "tier2" in doc
+    assert "tier2b" in doc
+    assert doc["tier2b"].get("riskHold") is False
 
 
 @pytest.mark.asyncio

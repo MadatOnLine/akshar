@@ -18,7 +18,13 @@
  * computation as the research app.js in TypeScript.
  */
 
-import { computeFaceHash, hammingDistance } from '@akshar/crypto';
+import { computeFaceHash, hammingDistance } from '@akshar/crypto/face-hash';
+import {
+  getLatestFrame32,
+  getLatestFrame8,
+  isFrameBridgeReady,
+  resetFrameBridge,
+} from './frame-bridge';
 
 export { hammingDistance };
 
@@ -102,69 +108,26 @@ function captureHash(): string | null {
  * This function connects to it via the globally-registered frame callbacks.
  */
 async function startCamera(): Promise<void> {
-  // Camera is already started by the <FaceCamera> component in the screen.
-  // We just need to wait a moment for it to initialize and start producing frames.
-  await sleep(500);
-  _cameraReady = true;
-
-  // Frame providers use react-native-vision-camera's takeSnapshot API
-  // via the NativeFaceCapture bridge module.
-  let { NativeFaceCapture } = require('react-native').NativeModules;
-
-  if (!NativeFaceCapture) {
-    // DEVELOPMENT MOCK: The native module is not linked yet.
-    // We mock the synchronous frame capture in JS to bypass the red screen
-    // and allow the UI flow (enroll/login) to be tested.
-    NativeFaceCapture = {
-      captureFrameSync: (width: number, height: number) => {
-        const size = width * height * 4;
-        const arr = new Array(size);
-        if (width === 8) {
-          for (let i = 0; i < size; i++) arr[i] = i % 255;
-        } else {
-          for (let i = 0; i < size; i++) arr[i] = Math.random() * 255;
-        }
-        return arr;
-      }
-    };
+  // Wait for FaceCamera frame processor to publish frames.
+  for (let i = 0; i < 40; i++) {
+    if (isFrameBridgeReady()) break;
+    await sleep(250);
   }
 
-  // 32x32 grayscale frame (for motion detection) —
-  // research equivalent: mCtx.drawImage(video, 0, 0, 32, 32) → getImageData → luminance
-  _getFrame32 = () => {
-    try {
-      const rgba = NativeFaceCapture.captureFrameSync(32, 32);
-      if (!rgba || rgba.length !== 32 * 32 * 4) return null;
-      const g = new Float32Array(1024);
-      for (let i = 0; i < 1024; i++) {
-        g[i] = 0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2];
-      }
-      return g;
-    } catch {
-      return null;
-    }
-  };
+  if (!isFrameBridgeReady()) {
+    throw new Error(
+      'Camera is not producing frames. On the emulator, enable Front Camera = Webcam0 in AVD settings, then restart the emulator.'
+    );
+  }
 
-  // 8x8 grayscale frame (for hash capture) —
-  // research equivalent: ctx.drawImage(video, 0, 0, 8, 8) → getImageData → luminance
-  _getFrame8 = () => {
-    try {
-      const rgba = NativeFaceCapture.captureFrameSync(8, 8);
-      if (!rgba || rgba.length !== 8 * 8 * 4) return null;
-      const lum: number[] = [];
-      for (let i = 0; i < 64; i++) {
-        lum.push(0.299 * rgba[i * 4] + 0.587 * rgba[i * 4 + 1] + 0.114 * rgba[i * 4 + 2]);
-      }
-      return lum;
-    } catch {
-      return null;
-    }
-  };
-
+  _cameraReady = true;
+  _getFrame32 = () => getLatestFrame32();
+  _getFrame8 = () => getLatestFrame8();
   _releaseCamera = () => {
     _cameraReady = false;
     _getFrame32 = null;
     _getFrame8 = null;
+    resetFrameBridge();
   };
 }
 

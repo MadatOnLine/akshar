@@ -1,0 +1,32 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "ios-simulator": {
+      "ios": {
+        "simulator": true
+      },
+      "env": {
+        "AKSHAR_AUTH_URL": "http://localhost:8001",
+        "AKSHAR_AI_URL": "http://localhost:8002",
+        "AKSHAR_MESH_URL": "http://localhost:8003",
+        "AKSHAR_MESH_WS_URL": "ws://localhost:8003"
+      }
+    },
+    "ios-device-dev": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "simulator": false
+      },
+      "env": {
+        "AKSHAR_AUTH_URL": "http://localhost:8001",
+        "AKSHAR_AI_URL": "http://localhost:8002",
+        "AKSHAR_MESH_URL": "http://localhost:8003",
+        "AKSHAR_MESH_WS_URL": "ws://localhost:8003"
+      }
+    }
+  }
+}

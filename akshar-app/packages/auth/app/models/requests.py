@@ -20,10 +20,12 @@ class EnrollRequest(BaseModel):
 
 
 class DirectEnrollRequest(BaseModel):
-    """Direct enrollment — client already performed hybrid liveness locally."""
+    """Hybrid enrollment — client liveness plus a validated server challenge."""
     name: str = Field(..., min_length=1, max_length=50)
     deviceId: str = Field(..., min_length=1, max_length=256)
     faceHash: str = Field(..., min_length=16, max_length=16)
+    attemptId: str = Field(..., min_length=1)
+    challengeId: str = Field(..., min_length=1)
 
     @field_validator("name")
     @classmethod
@@ -56,6 +58,20 @@ class LivenessRequest(BaseModel):
 class FaceLoginRequest(BaseModel):
     faceHash: str = Field(..., min_length=16, max_length=16)
     deviceId: str = Field(..., min_length=1, max_length=256)
+    livenessPassed: bool = False
+
+    @field_validator("faceHash")
+    @classmethod
+    def validate_face_hash(cls, v: str) -> str:
+        if not re.match(r"^[0-9a-f]{16}$", v.lower()):
+            raise ValueError("faceHash must be exactly 16 lowercase hex characters")
+        return v.lower()
+
+
+class ReverifyRequest(BaseModel):
+    faceHash: str = Field(..., min_length=16, max_length=16)
+    deviceId: str = Field(..., min_length=1, max_length=256)
+    livenessPassed: bool = True
 
     @field_validator("faceHash")
     @classmethod

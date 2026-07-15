@@ -69,6 +69,29 @@ async def test_face_login_not_recognised(mock_db):
 
 
 @pytest.mark.asyncio
+async def test_face_login_device_recovery(mock_db, mock_session):
+    mock_db.find = AsyncMock(return_value=[{
+        "userId": "user-abc",
+        "faceHash": "ffffffffffffffff",
+        "name": "Sidd",
+        "status": "active",
+        "deviceId": "web-browser-1",
+        "type": "user",
+    }])
+    mock_db.put = AsyncMock(return_value={"ok": True, "rev": "1-abc"})
+
+    with patch("app.services.tier2_service.touch_tier2b_on_login", new_callable=AsyncMock, return_value={}), \
+         patch("app.services.tier2_service.get_risk_status", new_callable=AsyncMock, return_value={"requiresRiskCheck": False, "riskReason": ""}):
+        result = await auth_service.face_login(
+            "0000000000000000", "web-browser-1", "127.0.0.1", liveness_passed=True
+        )
+
+    assert result["name"] == "Sidd"
+    assert result["distance"] == 0
+    mock_db.put.assert_awaited()
+
+
+@pytest.mark.asyncio
 async def test_face_login_banned_user(mock_db):
     mock_db.find = AsyncMock(return_value=[{
         "userId": "banned-user",
@@ -83,17 +106,21 @@ async def test_face_login_banned_user(mock_db):
 
 
 @pytest.mark.asyncio
-async def test_face_login_device_mismatch(mock_db):
+async def test_face_login_device_rebound(mock_db, mock_session):
     mock_db.find = AsyncMock(return_value=[{
         "userId": "user-abc",
         "faceHash": "abcdef0123456789",
         "status": "active",
         "deviceId": "device-1",
         "type": "user",
+        "name": "Test User",
     }])
+    mock_db.put = AsyncMock(return_value={"ok": True, "rev": "1-abc"})
 
-    with pytest.raises(ValueError, match="Device not recognized"):
-        await auth_service.face_login("abcdef0123456789", "different-device", "127.0.0.1")
+    result = await auth_service.face_login("abcdef0123456789", "different-device", "127.0.0.1")
+
+    assert result["deviceRebound"] is True
+    assert mock_db.put.called
 
 
 @pytest.mark.asyncio

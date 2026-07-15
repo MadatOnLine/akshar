@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Header, HTTPException
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
 from app.config import SERVICE_API_KEY
 from app.services import live_engine
@@ -28,13 +29,17 @@ async def classify_message(body: ClassifyRequest, x_service_key: str | None = He
     """Classify a single message. Called by akshar-mesh per incoming message."""
     _verify_service_key(x_service_key)
 
-    # StyleDistance AI detection (graceful degradation if model unavailable)
-    ai_result = detect_ai_text(body.text)
+    # CPU-bound ML inference must not block the async event loop.
+    ai_result = await run_in_threadpool(detect_ai_text, body.text)
     p_ai = ai_result.get("pAI", 0.0)
 
-    # Run live classification with all 5 signals
-    result = live_engine.classify_message(
-        body.room, body.sender, body.text, body.typingMs, ai_score=p_ai
+    result = await run_in_threadpool(
+        live_engine.classify_message,
+        body.room,
+        body.sender,
+        body.text,
+        body.typingMs,
+        p_ai,
     )
 
     result["aiDetection"] = ai_result

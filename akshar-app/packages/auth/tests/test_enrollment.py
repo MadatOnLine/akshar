@@ -1,6 +1,7 @@
 """Tests for enrollment flow."""
 from __future__ import annotations
 
+import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,6 +15,18 @@ def clear_enrollments():
     auth_service._enrollments.clear()
     yield
     auth_service._enrollments.clear()
+
+
+@pytest.fixture(autouse=True)
+def skip_liveness_min_delay():
+    """Tests submit challenges immediately — disable minimum elapsed guard."""
+    with patch("app.services.liveness_service.LIVENESS_MIN_ELAPSED", 0.0):
+        yield
+
+
+def _backdate_challenge(attempt_id: str, seconds: float = 5.0) -> None:
+    attempt = auth_service._enrollments[attempt_id]
+    attempt.challenge.issuedAt = time.time() - seconds
 
 
 @pytest.fixture
@@ -50,7 +63,7 @@ async def test_initiate_enrollment_success(mock_db):
 @pytest.mark.asyncio
 async def test_initiate_enrollment_duplicate_device(mock_db):
     mock_db.find = AsyncMock(return_value=[{"userId": "existing", "deviceId": "device-1"}])
-    with pytest.raises(ValueError, match="already has an enrolled account"):
+    with pytest.raises(ValueError, match="already has an account"):
         await auth_service.initiate_enrollment("Bob", "device-1")
 
 
@@ -128,7 +141,15 @@ async def test_validate_liveness_not_found():
 @pytest.mark.asyncio
 async def test_direct_enrollment_success(mock_db, mock_session):
     with patch("app.services.trust_store.create_initial_trust", new_callable=AsyncMock) as mock_trust:
-        result = await auth_service.direct_enrollment("Alice", "device-direct", "abcdef0123456789")
+        init = await auth_service.initiate_enrollment("Alice", "device-direct")
+        _backdate_challenge(init["attemptId"])
+        result = await auth_service.direct_enrollment(
+            "Alice",
+            "device-direct",
+            "abcdef0123456789",
+            init["attemptId"],
+            init["challenge"]["challengeId"],
+        )
 
     assert result["userId"]
     assert result["token"] == "jwt-token"
@@ -137,17 +158,47 @@ async def test_direct_enrollment_success(mock_db, mock_session):
 
 
 @pytest.mark.asyncio
+async def test_direct_enrollment_requires_valid_attempt(mock_db):
+    with pytest.raises(ValueError, match="not found"):
+        await auth_service.direct_enrollment(
+            "Bob", "device-x", "abcdef0123456789", "missing", "challenge"
+        )
+
+
+@pytest.mark.asyncio
 async def test_direct_enrollment_duplicate_device(mock_db):
     mock_db.find = AsyncMock(return_value=[{"userId": "existing", "deviceId": "device-dup"}])
-    with pytest.raises(ValueError, match="already has an enrolled account"):
-        await auth_service.direct_enrollment("Bob", "device-dup", "abcdef0123456789")
+    with pytest.raises(ValueError, match="already has an account"):
+        await auth_service.initiate_enrollment("Bob", "device-dup")
 
 
 @pytest.mark.asyncio
 async def test_direct_enrollment_duplicate_face(mock_db, mock_session):
-    mock_db.find = AsyncMock(side_effect=[
-        [],  # device check
-        [{"faceHash": "abcdef0123456789", "userId": "existing", "type": "user", "status": "active"}],
+    init = await auth_service.initiate_enrollment("Carol", "device-new")
+    _backdate_challenge(init["attemptId"])
+    mock_db.find = AsyncMock(return_value=[
+        {"faceHash": "abcdef0123456789", "userId": "existing", "type": "user", "status": "active"}
     ])
     with pytest.raises(ValueError, match="Face already enrolled"):
-        await auth_service.direct_enrollment("Carol", "device-new", "abcdef0123456789")
+        await auth_service.direct_enrollment(
+            "Carol",
+            "device-new",
+            "abcdef0123456789",
+            init["attemptId"],
+            init["challenge"]["challengeId"],
+        )
+
+
+@pytest.mark.asyncio
+async def test_direct_enrollment_rejects_instant_challenge(mock_db, mock_session):
+    with patch("app.services.liveness_service.LIVENESS_MIN_ELAPSED", 5.0), \
+         patch("app.services.trust_store.create_initial_trust", new_callable=AsyncMock):
+        init = await auth_service.initiate_enrollment("Fast", "device-fast")
+        with pytest.raises(ValueError, match="too quickly"):
+            await auth_service.direct_enrollment(
+                "Fast",
+                "device-fast",
+                "abcdef0123456789",
+                init["attemptId"],
+                init["challenge"]["challengeId"],
+            )

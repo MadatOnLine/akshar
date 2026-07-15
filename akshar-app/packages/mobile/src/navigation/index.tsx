@@ -1,6 +1,5 @@
 /**
- * Navigation — auth gate + tab navigation + stack screens.
- * Dark-themed with emoji tab icons, branded loading screen.
+ * Navigation — auth gate, risk overlay, tabs, and stack screens.
  */
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
@@ -14,13 +13,14 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { FeedScreen } from '../screens/FeedScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ModeratorScreen } from '../screens/ModeratorScreen';
+import { AccountStudioScreen } from '../screens/AccountStudioScreen';
+import { RiskVerificationScreen } from '../screens/RiskVerificationScreen';
 import type { RootStackParamList, AuthStackParamList, MainTabParamList } from '../types';
 
 const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainStack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-/* ─── Dark theme constants ─── */
 const DARK_BG = '#0c1018';
 const ACTIVE_TINT = '#6d8cff';
 const INACTIVE_TINT = '#566178';
@@ -28,7 +28,6 @@ const BORDER_TOP = '#283347';
 const HEADER_TEXT = '#e8edf6';
 const SUBTITLE_COLOR = '#8b97ad';
 
-/* ─── Loading / splash screen ─── */
 function LoadingScreen() {
   return (
     <View testID="loading-screen" style={styles.loadingContainer}>
@@ -48,12 +47,10 @@ function LoadingScreen() {
   );
 }
 
-/* ─── Tab bar icon helper ─── */
 function TabIcon({ emoji, color }: { emoji: string; color: string }) {
   return <Text style={{ fontSize: 22, color }}>{emoji}</Text>;
 }
 
-/* ─── Tab navigator ─── */
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -108,7 +105,6 @@ function MainTabs() {
   );
 }
 
-/* ─── Stack navigators ─── */
 const darkHeaderOptions = {
   headerStyle: { backgroundColor: DARK_BG },
   headerTintColor: HEADER_TEXT,
@@ -116,20 +112,33 @@ const darkHeaderOptions = {
 };
 
 function MainNavigator() {
+  const { requiresRiskCheck, riskReason, checkRisk, clearRisk } = useAuth();
+
   return (
-    <MainStack.Navigator
-      screenOptions={{
-        headerShown: false,
-        ...darkHeaderOptions,
-      }}
-    >
-      <MainStack.Screen name="Home" component={MainTabs} />
-      <MainStack.Screen
-        name="Chat"
-        component={ChatScreen}
-        options={{ headerShown: true, title: 'Chat' }}
+    <>
+      <MainStack.Navigator
+        screenOptions={{
+          headerShown: false,
+          ...darkHeaderOptions,
+        }}
+      >
+        <MainStack.Screen name="Home" component={MainTabs} />
+        <MainStack.Screen
+          name="Chat"
+          component={ChatScreen}
+          options={{ headerShown: true, title: 'Chat' }}
+        />
+        <MainStack.Screen name="AccountStudio" component={AccountStudioScreen} />
+      </MainStack.Navigator>
+      <RiskVerificationScreen
+        visible={requiresRiskCheck}
+        reason={riskReason}
+        onVerified={async () => {
+          clearRisk();
+          await checkRisk();
+        }}
       />
-    </MainStack.Navigator>
+    </>
   );
 }
 
@@ -146,7 +155,6 @@ function AuthNavigator() {
   );
 }
 
-/* ─── Root component ─── */
 export function AppNavigation() {
   const { isAuthenticated, loading } = useAuth();
 
@@ -155,13 +163,24 @@ export function AppNavigation() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      theme={{
+        dark: true,
+        colors: {
+          background: '#0c1018',
+          card: '#0c1018',
+          text: '#e8edf6',
+          border: '#283347',
+          primary: '#6d8cff',
+          notification: '#6d8cff',
+        },
+      }}
+    >
       {isAuthenticated ? <MainNavigator /> : <AuthNavigator />}
     </NavigationContainer>
   );
 }
 
-/* ─── Styles ─── */
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,

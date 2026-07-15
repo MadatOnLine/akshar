@@ -1,8 +1,5 @@
 /**
- * AuthProvider — manages session state, token refresh, and auth lifecycle.
- * Persists tokens + deviceId to Keychain so the user stays logged in across
- * app restarts. When refresh tokens expire, falls back to face-based
- * re-authentication if a deviceId is available.
+ * AuthProvider — session state, token refresh, and risk verification gate.
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as Keychain from 'react-native-keychain';
@@ -12,23 +9,42 @@ import { config } from '../config';
 
 const KEYCHAIN_SERVICE = 'com.akshar.session';
 const DEVICE_KEYCHAIN_SERVICE = 'com.akshar.device';
+const INIT_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms);
+    promise
+      .then(value => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch(err => {
+        clearTimeout(timer);
+        reject(err);
+      });
+  });
+}
 
 interface AuthState {
   isAuthenticated: boolean;
   userId: string | null;
   isAdmin: boolean;
   loading: boolean;
+  requiresRiskCheck: boolean;
+  riskReason: string;
 }
 
 interface AuthContextType extends AuthState {
-  login: (token: string, refreshToken: string, userId: string) => void;
+  login: (token: string, refreshToken: string, userId: string) => Promise<void>;
   logout: () => Promise<void>;
   deviceId: string | null;
+  setDeviceId: (id: string) => void;
+  checkRisk: (loginData?: { requiresRiskCheck?: boolean; riskReason?: string }) => Promise<void>;
+  clearRisk: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
-
-// --- Keychain helpers ---
 
 async function persistSession(token: string, refreshToken: string, userId: string): Promise<void> {
   try {
@@ -69,18 +85,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userId: null,
     isAdmin: false,
     loading: true,
+    requiresRiskCheck: false,
+    riskReason: '',
   });
-  const [deviceId, setDeviceId] = useState<string | null>(null);
+  const [deviceId, setDeviceIdState] = useState<string | null>(null);
   const refreshTokenRef = useRef<string | null>(null);
   const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const login = useCallback((token: string, refreshToken: string, userId: string) => {
+  const clearRisk = useCallback(() => {
+    setState(prev => ({ ...prev, requiresRiskCheck: false, riskReason: '' }));
+  }, []);
+
+  const checkRisk = useCallback(async (loginData?: { requiresRiskCheck?: boolean; riskReason?: string }) => {
+    if (loginData?.requiresRiskCheck) {
+      setState(prev => ({
+        ...prev,
+        requiresRiskCheck: true,
+        riskReason: loginData.riskReason || 'Identity verification required',
+      }));
+      return;
+    }
+    try {
+      const risk = await authApi.getRiskStatus();
+      setState(prev => ({
+        ...prev,
+        requiresRiskCheck: !!risk.requiresRiskCheck,
+        riskReason: risk.riskReason || '',
+      }));
+    } catch {}
+  }, []);
+
+  const login = useCallback(async (token: string, refreshToken: string, userId: string) => {
     setToken(token);
     refreshTokenRef.current = refreshToken;
-    setState({ isAuthenticated: true, userId, isAdmin: false, loading: false });
+    setState(prev => ({
+      ...prev,
+      isAuthenticated: true,
+      userId,
+      isAdmin: false,
+      loading: false,
+    }));
     scheduleRefresh(token, userId);
-    persistSession(token, refreshToken, userId);
-  }, []);
+    await persistSession(token, refreshToken, userId);
+    await checkRisk();
+  }, [checkRisk]);
 
   const logout = useCallback(async () => {
     try {
@@ -89,9 +137,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     refreshTokenRef.current = null;
     if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
-    setState({ isAuthenticated: false, userId: null, isAdmin: false, loading: false });
+    setState({
+      isAuthenticated: false,
+      userId: null,
+      isAdmin: false,
+      loading: false,
+      requiresRiskCheck: false,
+      riskReason: '',
+    });
     await clearPersistedSession();
-    // Note: deviceId is NOT cleared on logout — allows face re-login
+  }, []);
+
+  const setDeviceId = useCallback((id: string) => {
+    setDeviceIdState(id);
   }, []);
 
   function scheduleRefresh(token: string, userId: string) {
@@ -110,7 +168,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           scheduleRefresh(result.token, userId);
           persistSession(result.token, result.refreshToken, userId);
         } catch {
-          // Refresh failed — attempt silent face re-authentication
           const reauthed = await attemptFaceReauth();
           if (!reauthed) {
             logout();
@@ -120,25 +177,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }
 
-  /**
-   * Attempt silent face-based re-authentication when refresh token expires.
-   * Returns true if successful, false if user must manually log in.
-   */
   async function attemptFaceReauth(): Promise<boolean> {
     try {
       const storedDeviceId = await getPersistedDeviceId();
       if (!storedDeviceId) return false;
 
-      // Capture face silently (skip liveness for background re-auth)
       const faceHash = await captureHashOnly();
-      const result = await authApi.faceLogin(faceHash, storedDeviceId);
+      const result = await authApi.faceLogin(faceHash, storedDeviceId, false);
 
-      // Success — restore session
       setToken(result.token);
       refreshTokenRef.current = result.refreshToken;
-      setState({ isAuthenticated: true, userId: result.userId, isAdmin: false, loading: false });
+      setState(prev => ({
+        ...prev,
+        isAuthenticated: true,
+        userId: result.userId,
+        isAdmin: false,
+        loading: false,
+      }));
       scheduleRefresh(result.token, result.userId);
       await persistSession(result.token, result.refreshToken, result.userId);
+      await checkRisk(result);
       return true;
     } catch {
       return false;
@@ -146,72 +204,94 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
-    // On mount, load deviceId and restore session from Keychain
-    (async () => {
-      // Load deviceId (persisted during enrollment)
-      const storedDeviceId = await getPersistedDeviceId();
-      if (storedDeviceId) {
-        setDeviceId(storedDeviceId);
-      }
+    let cancelled = false;
 
-      // Attempt session restoration
-      const stored = await getPersistedSession();
-      if (!stored) {
+    const finishLoading = () => {
+      if (!cancelled) {
         setState(prev => ({ ...prev, loading: false }));
-        return;
       }
+    };
 
-      // 1. Try using stored access token (may still be valid)
+    (async () => {
       try {
-        const payload = JSON.parse(atob(stored.token.split('.')[1]));
-        const now = Math.floor(Date.now() / 1000);
+        await withTimeout((async () => {
+          const storedDeviceId = await getPersistedDeviceId();
+          if (storedDeviceId) {
+            setDeviceIdState(storedDeviceId);
+          }
 
-        if (payload.exp > now) {
-          setToken(stored.token);
-          refreshTokenRef.current = stored.refreshToken;
-          setState({ isAuthenticated: true, userId: stored.userId, isAdmin: false, loading: false });
-          scheduleRefresh(stored.token, stored.userId);
-          return;
-        }
-      } catch {}
+          const stored = await getPersistedSession();
+          if (!stored) {
+            return;
+          }
 
-      // 2. Access token expired — try refresh token
-      try {
-        const result = await authApi.refresh(stored.refreshToken);
-        setToken(result.token);
-        refreshTokenRef.current = result.refreshToken;
-        setState({ isAuthenticated: true, userId: result.userId, isAdmin: false, loading: false });
-        scheduleRefresh(result.token, result.userId);
-        await persistSession(result.token, result.refreshToken, result.userId);
-        return;
-      } catch {}
+          try {
+            const payload = JSON.parse(atob(stored.token.split('.')[1]));
+            const now = Math.floor(Date.now() / 1000);
 
-      // 3. Refresh token also expired — try silent face re-authentication
-      if (storedDeviceId) {
-        try {
-          const faceHash = await captureHashOnly();
-          const result = await authApi.faceLogin(faceHash, storedDeviceId);
-          setToken(result.token);
-          refreshTokenRef.current = result.refreshToken;
-          setState({ isAuthenticated: true, userId: result.userId, isAdmin: false, loading: false });
-          scheduleRefresh(result.token, result.userId);
-          await persistSession(result.token, result.refreshToken, result.userId);
-          return;
-        } catch {}
+            if (payload.exp > now) {
+              setToken(stored.token);
+              refreshTokenRef.current = stored.refreshToken;
+              setState(prev => ({
+                ...prev,
+                isAuthenticated: true,
+                userId: stored.userId,
+                isAdmin: false,
+                loading: false,
+              }));
+              scheduleRefresh(stored.token, stored.userId);
+              await checkRisk();
+              return;
+            }
+          } catch {}
+
+          try {
+            const result = await withTimeout(
+              authApi.refresh(stored.refreshToken),
+              3000,
+              'Token refresh',
+            );
+            setToken(result.token);
+            refreshTokenRef.current = result.refreshToken;
+            setState(prev => ({
+              ...prev,
+              isAuthenticated: true,
+              userId: result.userId,
+              isAdmin: false,
+              loading: false,
+            }));
+            scheduleRefresh(result.token, result.userId);
+            await persistSession(result.token, result.refreshToken, result.userId);
+            await checkRisk();
+            return;
+          } catch {}
+
+          await clearPersistedSession();
+        })(), INIT_TIMEOUT_MS, 'Session restore');
+      } catch {
+      } finally {
+        finishLoading();
       }
-
-      // 4. All restoration attempts failed — user must manually log in
-      await clearPersistedSession();
-      setState(prev => ({ ...prev, loading: false }));
     })();
 
     return () => {
+      cancelled = true;
       if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
     };
-  }, []);
+  }, [checkRisk]);
 
   return (
-    <AuthContext.Provider value={{ ...state, login, logout, deviceId }}>
+    <AuthContext.Provider
+      value={{
+        ...state,
+        login,
+        logout,
+        deviceId,
+        setDeviceId,
+        checkRisk,
+        clearRisk,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

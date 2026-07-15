@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Akshar — iPhone 13 Preview</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1rem;
+      background: radial-gradient(circle at top, #1f2937, #0b1020 70%);
+      color: #e5e7eb;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 1.5rem;
+    }
+    h1 { font-size: 1.1rem; font-weight: 600; opacity: 0.9; }
+    p { max-width: 42rem; text-align: center; line-height: 1.5; color: #9ca3af; font-size: 0.95rem; }
+    .phone {
+      width: 390px;
+      height: 844px;
+      border-radius: 48px;
+      padding: 14px;
+      background: linear-gradient(145deg, #2d3748, #111827);
+      box-shadow:
+        0 30px 80px rgba(0, 0, 0, 0.55),
+        inset 0 0 0 2px rgba(255, 255, 255, 0.08);
+      position: relative;
+    }
+    .notch {
+      position: absolute;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 120px;
+      height: 28px;
+      background: #0b1020;
+      border-radius: 20px;
+      z-index: 2;
+    }
+    .screen {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 36px;
+      background: #000;
+    }
+    .badge {
+      font-size: 0.8rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.15);
+      color: #93c5fd;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+    }
+    @media (max-height: 920px) {
+      .phone { transform: scale(0.85); transform-origin: center top; }
+    }
+  </style>
+</head>
+<body>
+  <span class="badge">iPhone 13 — 390 × 844 presentation frame</span>
+  <h1>Akshar Mobile Demo</h1>
+  <p>
+  This frame shows the mobile web experience at iPhone 13 size while you present from Windows.
+  For the native React Native app, run <code>scripts/run-ios-iphone13.sh</code> on a Mac with Xcode.
+  </p>
+  <div class="phone" aria-label="iPhone 13 device frame">
+    <div class="notch" aria-hidden="true"></div>
+    <iframe class="screen" src="/" title="Akshar app"></iframe>
+  </div>
+</body>
+</html>

@@ -1,12 +1,14 @@
 /**
- * ProfileScreen — user profile with trust score display.
+ * ProfileScreen — user profile with trust score and Account Studio link.
  */
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
 import { TrustBadge } from '../components/TrustBadge';
 import { auth, ai } from '../services/api';
 import { useAuth } from '../providers/AuthProvider';
-import type { UserProfile, TrustState } from '../types';
+import type { UserProfile, TrustState, Tier2State, RootStackParamList } from '../types';
 
 const TIER_COLORS: Record<string, string> = {
   Colony: '#43d17a',
@@ -24,10 +26,12 @@ const SECURITY_ROWS = [
 ];
 
 export function ProfileScreen() {
-  const { userId, logout } = useAuth();
+  const navigation = useNavigation<StackNavigationProp<RootStackParamList>>();
+  const { userId, logout, checkRisk } = useAuth();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [trust, setTrust] = useState<TrustState | null>(null);
-
+  const [tier2, setTier2] = useState<Tier2State | null>(null);
+  const [tier2b, setTier2b] = useState<Tier2State | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -39,12 +43,21 @@ export function ProfileScreen() {
   const loadProfile = async () => {
     try {
       setError(null);
-      const [profileResult, trustResult] = await Promise.all([
+      const [profileResult, trustResult, tier2Result] = await Promise.all([
         auth.getProfile(userId!),
         ai.getTrust(userId!),
+        auth.getTier2(userId!).catch(() => null),
       ]);
       setProfile(profileResult);
       setTrust(trustResult);
+      setTier2(tier2Result?.tier2 ?? null);
+      setTier2b(tier2Result?.tier2b ?? null);
+      if (tier2Result?.tier2b?.requiresRiskCheck) {
+        await checkRisk({
+          requiresRiskCheck: true,
+          riskReason: tier2Result.tier2b.riskReason,
+        });
+      }
     } catch (err: any) {
       console.error('Failed to load profile:', err);
       setError(err.message || 'Failed to load profile');
@@ -77,7 +90,6 @@ export function ProfileScreen() {
 
   return (
     <ScrollView style={styles.container} testID="profile-screen">
-      {/* Avatar */}
       <View style={styles.avatarContainer}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{profile.name[0]?.toUpperCase()}</Text>
@@ -86,7 +98,6 @@ export function ProfileScreen() {
         {trust && <TrustBadge tier={trust.tier} size="medium" />}
       </View>
 
-      {/* Trust Score Card */}
       <View style={styles.card}>
         <Text style={styles.cardLabel}>Trust Score</Text>
         <Text style={styles.trustScore} testID="profile-trust-score">
@@ -108,7 +119,28 @@ export function ProfileScreen() {
         </Text>
       </View>
 
-      {/* Security Status Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Account integrity</Text>
+        <Text style={styles.tier2Summary}>
+          {tier2
+            ? `${tier2.verdict || tier2.status} · ${Math.round((tier2.humanness || 0) * 100)}%`
+            : 'Establishing...'}
+        </Text>
+        <Text style={[styles.cardLabel, { marginTop: 12 }]}>Person binding</Text>
+        <Text style={styles.tier2Summary}>
+          {tier2b
+            ? `${tier2b.verdict || tier2b.status}${tier2b.requiresRiskCheck ? ' · verification required' : ''}`
+            : 'Risk-based verification only'}
+        </Text>
+        <TouchableOpacity
+          style={styles.tier2Button}
+          onPress={() => navigation.navigate('AccountStudio')}
+          accessibilityLabel="Open Account Studio"
+        >
+          <Text style={styles.tier2ButtonText}>Open Account Studio →</Text>
+        </TouchableOpacity>
+      </View>
+
       <View style={styles.card} testID="security-status-card">
         <Text style={styles.securityHeader}>🛡️ Security Status</Text>
         {SECURITY_ROWS.map((row) => (
@@ -120,7 +152,6 @@ export function ProfileScreen() {
         ))}
       </View>
 
-      {/* Info Section */}
       <View style={styles.card}>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Member since</Text>
@@ -140,7 +171,6 @@ export function ProfileScreen() {
         </View>
       </View>
 
-      {/* Logout */}
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={handleLogout}
@@ -150,14 +180,12 @@ export function ProfileScreen() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
 
-      {/* Footer */}
       <Text style={styles.footer}>Akshar Protocol v1.0.0</Text>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  /* Layout */
   container: {
     flex: 1,
     backgroundColor: '#0d1117',
@@ -169,8 +197,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 48,
   },
-
-  /* Avatar */
   avatarContainer: {
     alignItems: 'center',
     marginBottom: 32,
@@ -201,8 +227,6 @@ const styles = StyleSheet.create({
     color: '#e6edf3',
     marginBottom: 8,
   },
-
-  /* Shared dark card */
   card: {
     backgroundColor: '#1c2433',
     borderRadius: 14,
@@ -216,8 +240,6 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
-
-  /* Trust Score */
   trustScore: {
     fontSize: 28,
     fontWeight: '700',
@@ -239,8 +261,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-
-  /* Security Status */
+  tier2Summary: {
+    fontSize: 14,
+    color: '#8b949e',
+    lineHeight: 20,
+  },
+  tier2Button: {
+    backgroundColor: '#6d8cff',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 14,
+  },
+  tier2ButtonText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
   securityHeader: {
     fontSize: 16,
     fontWeight: '700',
@@ -271,8 +308,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#e6edf3',
   },
-
-  /* Info Section */
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -289,8 +324,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#e6edf3',
   },
-
-  /* Logout */
   logoutButton: {
     borderWidth: 1.5,
     borderColor: '#ff6b6b',
@@ -306,8 +339,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-
-  /* Footer */
   footer: {
     textAlign: 'center',
     color: '#566178',

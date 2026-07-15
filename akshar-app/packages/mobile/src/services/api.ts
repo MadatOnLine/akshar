@@ -2,6 +2,7 @@
  * HTTP API client — wraps fetch with auth headers and error handling.
  */
 import { config } from '../config';
+import type { RiskStatus, StudioDashboard } from '../types';
 
 let _token: string | null = null;
 
@@ -11,6 +12,17 @@ export function setToken(token: string | null): void {
 
 export function getToken(): string | null {
   return _token;
+}
+
+function formatApiError(detail: unknown, fallback: string): string {
+  if (!detail) return fallback;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => (typeof item === 'object' && item && 'msg' in item ? String(item.msg) : String(item)))
+      .join('; ');
+  }
+  return fallback;
 }
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
@@ -24,13 +36,13 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
   }
 
   const response = await fetch(url, { ...options, headers });
+  const body = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(body.detail || body.error || `HTTP ${response.status}`);
+    throw new Error(formatApiError(body.detail, body.error || `HTTP ${response.status}`));
   }
 
-  return response.json();
+  return body;
 }
 
 // --- Auth API ---
@@ -41,10 +53,16 @@ export const auth = {
       body: JSON.stringify({ name, deviceId }),
     }),
 
-  enrollDirect: (name: string, deviceId: string, faceHash: string) =>
+  enrollDirect: (
+    name: string,
+    deviceId: string,
+    faceHash: string,
+    attemptId: string,
+    challengeId: string,
+  ) =>
     request<any>(`${config.authUrl}/auth/enroll-direct`, {
       method: 'POST',
-      body: JSON.stringify({ name, deviceId, faceHash }),
+      body: JSON.stringify({ name, deviceId, faceHash, attemptId, challengeId }),
     }),
 
   liveness: (attemptId: string, challengeId: string, faceHash: string) =>
@@ -53,10 +71,10 @@ export const auth = {
       body: JSON.stringify({ attemptId, challengeId, faceHash }),
     }),
 
-  faceLogin: (faceHash: string, deviceId: string) =>
+  faceLogin: (faceHash: string, deviceId: string, livenessPassed = true) =>
     request<any>(`${config.authUrl}/auth/login`, {
       method: 'POST',
-      body: JSON.stringify({ faceHash, deviceId }),
+      body: JSON.stringify({ faceHash, deviceId, livenessPassed }),
     }),
 
   biometricLogin: (deviceId: string, biometricToken: string) =>
@@ -76,6 +94,27 @@ export const auth = {
 
   getProfile: (userId: string) =>
     request<any>(`${config.authUrl}/auth/profile/${userId}`),
+
+  getTier2: (userId: string) =>
+    request<any>(`${config.authUrl}/auth/tier2/${userId}`),
+
+  reverify: (faceHash: string, deviceId: string, livenessPassed = true) =>
+    request<any>(`${config.authUrl}/auth/reverify`, {
+      method: 'POST',
+      body: JSON.stringify({ faceHash, deviceId, livenessPassed }),
+    }),
+
+  getRiskStatus: () =>
+    request<RiskStatus>(`${config.authUrl}/auth/risk-status`),
+
+  getStudio: (userId: string) =>
+    request<StudioDashboard>(`${config.authUrl}/auth/studio/${userId}`),
+
+  submitAppeal: (reportId: string, appealText: string) =>
+    request<any>(`${config.authUrl}/auth/reports/${reportId}/appeal`, {
+      method: 'POST',
+      body: JSON.stringify({ appealText }),
+    }),
 };
 
 // --- AI API ---

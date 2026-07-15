@@ -16,7 +16,7 @@
  *   3. POST to server with hash
  */
 import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import * as Keychain from 'react-native-keychain';
 import { auth } from '../services/api';
 import { captureFaceWithLiveness, type LivenessState } from '../services/face-capture';
@@ -26,7 +26,7 @@ import { useAuth } from '../providers/AuthProvider';
 const DEVICE_KEYCHAIN_SERVICE = 'com.akshar.device';
 
 export function EnrollmentScreen() {
-  const { login } = useAuth();
+  const { login, setDeviceId } = useAuth();
   const cameraRef = useRef<FaceCameraRef>(null);
   const [name, setName] = useState('');
   const [deviceId] = useState(
@@ -65,21 +65,29 @@ export function EnrollmentScreen() {
     setLiveness(s => ({ ...s, passiveStatus: 'pending', activeStatus: 'pending', statusMessage: '', statusKind: '' }));
 
     try {
+      const enrollInit = await auth.enroll(trimmedName, deviceId);
       const hash = await captureFaceWithLiveness(setLiveness);
 
       setLiveness(s => ({ ...s, statusMessage: 'Liveness passed — enrolling your face...', statusKind: 'good' }));
 
-      const result = await auth.enrollDirect(trimmedName, deviceId, hash);
+      const result = await auth.enrollDirect(
+        trimmedName,
+        deviceId,
+        hash,
+        enrollInit.attemptId,
+        enrollInit.challenge.challengeId,
+      );
 
       setLiveness(s => ({ ...s, statusMessage: 'Face enrolled — signing you in...', statusKind: 'good' }));
       await persistDeviceId();
-      login(result.token, result.refreshToken, result.userId);
+      setDeviceId(deviceId);
+      await login(result.token, result.refreshToken, result.userId);
     } catch (err: any) {
       setLiveness(s => ({ ...s, statusMessage: err.message || 'Enrollment failed.', statusKind: 'bad' }));
     } finally {
       setIsVerifying(false);
     }
-  }, [name, deviceId, login, persistDeviceId]);
+  }, [name, deviceId, login, persistDeviceId, setDeviceId]);
 
   // --- Login button (research: btn-login) ---
   const handleLogin = useCallback(async () => {
@@ -94,27 +102,48 @@ export function EnrollmentScreen() {
 
       setLiveness(s => ({ ...s, statusMessage: 'Liveness passed — matching your face...', statusKind: 'good' }));
 
-      const result = await auth.faceLogin(hash, devId);
+      const result = await auth.faceLogin(hash, devId, true);
 
       setLiveness(s => ({
         ...s,
         statusMessage: `Welcome back, ${result.name}! Signing in...`,
         statusKind: 'good',
       }));
-      login(result.token, result.refreshToken, result.userId);
+      if (!storedDevice) {
+        await Keychain.setGenericPassword('deviceId', devId, { service: DEVICE_KEYCHAIN_SERVICE });
+      }
+      setDeviceId(devId);
+      await login(result.token, result.refreshToken, result.userId);
     } catch (err: any) {
       setLiveness(s => ({ ...s, statusMessage: err.message || 'Login failed.', statusKind: 'bad' }));
     } finally {
       setIsVerifying(false);
     }
-  }, [deviceId, login]);
+  }, [deviceId, login, setDeviceId]);
+
+  const handleResetDevice = useCallback(async () => {
+    try {
+      await Keychain.resetGenericPassword({ service: DEVICE_KEYCHAIN_SERVICE });
+      setLiveness(s => ({
+        ...s,
+        statusMessage: 'Device reset — create a new account or log in with face.',
+        statusKind: 'good',
+      }));
+    } catch {
+      setLiveness(s => ({ ...s, statusMessage: 'Could not reset device.', statusKind: 'bad' }));
+    }
+  }, []);
 
   // Dot color (research CSS: .pending→warn, .ok→good, .fail→bad)
   const dotColor = (status: string) =>
     status === 'ok' ? '#43d17a' : status === 'fail' ? '#ff6b6b' : status === 'pending' ? '#ffc66b' : '#44506a';
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={styles.title}>Sign in with your face</Text>
       <Text style={styles.description}>
         Tier 0 verification runs a <Text style={styles.bold}>hybrid liveness</Text> check
@@ -199,6 +228,10 @@ export function EnrollmentScreen() {
         </TouchableOpacity>
       </View>
 
+      <TouchableOpacity onPress={handleResetDevice} disabled={isVerifying}>
+        <Text style={styles.resetLink}>Reset this device</Text>
+      </TouchableOpacity>
+
       {/* Status (research: #status) */}
       {liveness.statusMessage !== '' && (
         <Text style={[
@@ -209,13 +242,17 @@ export function EnrollmentScreen() {
           {liveness.statusMessage}
         </Text>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  scroll: {
     flex: 1,
+    backgroundColor: '#0c1018',
+  },
+  container: {
+    flexGrow: 1,
     backgroundColor: '#0c1018',
     padding: 20,
     justifyContent: 'center',
@@ -375,6 +412,7 @@ const styles = StyleSheet.create({
   },
   btnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   btnText: { color: '#e8edf6', fontSize: 14 },
+  resetLink: { color: '#8b97ad', fontSize: 13, textAlign: 'center', marginBottom: 8 },
 
   // Status
   status: { fontSize: 14, textAlign: 'center', color: '#8b97ad', minHeight: 20 },

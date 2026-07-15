@@ -30,3 +30,9 @@ Thumbs.db
 dist/
 build/
 *.tgz
+
+# Local demo / dev artifacts
+akshar-app/.demo-run/
+akshar-app/*-test-output.txt
+akshar-app/packages/*/.venv-*/
+akshar-app/packages/mobile/android/.gradle/

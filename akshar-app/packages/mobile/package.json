@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@akshar/crypto": "file:../crypto",
+    "@babel/runtime": "^8.0.0",
     "@noble/ciphers": "0.5.3",
     "@noble/hashes": "1.4.0",
     "@noble/secp256k1": "2.1.0",
@@ -33,6 +34,7 @@
     "socket.io-client": "4.7.5",
     "text-encoding": "^0.7.0",
     "uuid": "9.0.1",
+    "vision-camera-resize-plugin": "^3.2.0",
     "zod": "3.23.8"
   },
   "devDependencies": {

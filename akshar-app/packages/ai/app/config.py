@@ -53,6 +53,12 @@ WEIGHT_AI_TEXT: float = 0.8
 # --- Tier-1 ---
 TIER1_INTERVAL: int = int(os.getenv("TIER1_INTERVAL", "86400"))
 
+# --- Tier-2 (person-binding / re-auth) ---
+TIER2_REAUTH_INTERVAL_SEC: int = int(os.getenv("TIER2_REAUTH_INTERVAL_SEC", "120"))
+TIER2_FACE_MATCH_THRESHOLD: int = int(os.getenv("TIER2_FACE_MATCH_THRESHOLD", "14"))
+TIER2_BOOST_HUMANNESS: float = 0.85
+TIER2_OVERDUE_HUMANNESS: float = 0.15
+
 # --- StyleDistance Model ---
 STYLE_MODEL_NAME: str = os.getenv("STYLE_MODEL_NAME", "StyleDistance/styledistance")
 CLASSIFIER_PATH: str = os.getenv("CLASSIFIER_PATH", "ml_models/classifier.pkl")

@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db.couch_client import db
-from app.routes import classify, trust, drift, moderator
+from app.routes import classify, trust, drift, moderator, tier2
 from app.services import style_detector, drift_engine
 
 
@@ -60,6 +60,7 @@ app = FastAPI(
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.include_router(classify.router)
 app.include_router(trust.router)
+app.include_router(tier2.router)
 app.include_router(drift.router)
 app.include_router(moderator.router)
 

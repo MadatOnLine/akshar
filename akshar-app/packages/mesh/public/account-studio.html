@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Akshar — Account Studio</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0c1018; color: #e8edf6; min-height: 100vh; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 26px; margin-bottom: 4px; }
+    .sub { color: #8b97ad; margin-bottom: 20px; font-size: 14px; }
+    .top-links a { color: #6d8cff; text-decoration: none; font-size: 14px; margin-right: 16px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: #141b28; border: 1px solid #283347; border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+    .card h2 { font-size: 15px; margin-bottom: 12px; color: #c5d0e6; }
+    .trust-big { font-size: 34px; font-weight: 800; }
+    .badge { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: #1b3d2d; color: #43d17a; }
+    .badge.warn { background: #3d3318; color: #ffc66b; }
+    .badge.bad { background: #3d1818; color: #ff6b6b; }
+    .bar { height: 8px; background: #0e131d; border-radius: 6px; overflow: hidden; margin: 10px 0; }
+    .bar > div { height: 100%; background: linear-gradient(90deg, #6d8cff, #58e1c0); }
+    .stat-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+    .stat { flex: 1; min-width: 100px; background: #0e131d; border-radius: 10px; padding: 12px; text-align: center; }
+    .stat .n { font-size: 22px; font-weight: 800; }
+    .stat .l { font-size: 11px; color: #8b97ad; margin-top: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid #1f2a3d; }
+    th { color: #8b97ad; font-weight: 600; }
+    .check { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1f2a3d; font-size: 13px; }
+    .check:last-child { border-bottom: none; }
+    .pass { color: #43d17a; font-weight: 700; }
+    .fail { color: #ff6b6b; font-weight: 700; }
+    .report { border: 1px solid #283347; border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #0e131d; }
+    .report h4 { font-size: 14px; margin-bottom: 6px; }
+    .report p { font-size: 13px; color: #9aa8c0; line-height: 1.5; }
+    textarea { width: 100%; min-height: 80px; padding: 10px; border-radius: 8px; border: 1px solid #283347; background: #0e131d; color: #e8edf6; margin-top: 8px; font-family: inherit; }
+    .btn { border: none; border-radius: 10px; padding: 11px 14px; font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 8px; }
+    .btn-primary { background: #6d8cff; color: #fff; width: 100%; }
+    .btn-secondary { background: #1c2433; color: #e8edf6; border: 1px solid #283347; }
+    .status { font-size: 13px; color: #8b97ad; margin-top: 8px; min-height: 18px; }
+    .status.good { color: #43d17a; }
+    .status.bad { color: #ff6b6b; }
+    .hidden { display: none !important; }
+    .risk-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 16px; }
+    .risk-panel { background: #141b28; border: 1px solid #663333; border-radius: 16px; padding: 24px; max-width: 480px; width: 100%; }
+    .risk-panel h2 { color: #ff8a8a; margin-bottom: 8px; }
+    .cam-shell { position: relative; width: 100%; aspect-ratio: 4/3; border-radius: 12px; overflow: hidden; background: #05080d; margin: 14px 0; }
+    .cam-shell video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+  </style>
+</head>
+<body>
+  <div id="risk-overlay" class="risk-overlay hidden">
+    <div class="risk-panel">
+      <h2>Identity verification required</h2>
+      <p id="risk-reason" style="color:#9aa8c0;font-size:14px;line-height:1.5;margin-bottom:8px;">Your account is under review. Complete verification to continue.</p>
+      <p style="font-size:13px;color:#ff8a8a;">You cannot skip this step while your account is at risk.</p>
+      <div class="cam-shell">
+        <video id="risk-cam" autoplay playsinline muted></video>
+        <div id="risk-challenge-overlay" class="hidden" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.75);">
+          <div id="risk-challenge-text" style="font-size:18px;font-weight:800;color:#fff;text-align:center;padding:0 12px;"></div>
+          <div id="risk-challenge-timer" style="margin-top:8px;color:#58e1c0;font-weight:700;"></div>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="completeRiskCheck()">Complete verification</button>
+      <p class="status" id="risk-status"></p>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="top-links">
+      <a href="/">← Back to app</a>
+    </div>
+    <h1>Account Studio</h1>
+    <p class="sub">Your trust snapshot, post analytics, and moderation reports — no trust history is shown here.</p>
+
+    <div class="card">
+      <h2>Trust score</h2>
+      <div id="trust-tier" class="badge">—</div>
+      <div class="trust-big" id="trust-score">—</div>
+      <div class="bar"><div id="trust-bar" style="width:0%"></div></div>
+      <p style="font-size:13px;color:#8b97ad;margin-top:8px;" id="binding-summary">—</p>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Account integrity</h2>
+        <div id="integrity-checks"></div>
+      </div>
+      <div class="card">
+        <h2>Person binding</h2>
+        <div id="binding-checks"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Post analytics</h2>
+      <div class="stat-row" id="analytics-stats"></div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Post</th><th>👍</th><th>👎</th><th>🔄</th><th>Engagement</th></tr></thead>
+          <tbody id="posts-table"></tbody>
+        </table>
+      </div>
+      <p class="status" id="posts-empty">No posts yet — share from the Feed tab in the main app.</p>
+    </div>
+
+    <div class="card">
+      <h2>Reports against your account</h2>
+      <p style="font-size:13px;color:#8b97ad;margin-bottom:12px;">If a report is upheld, you can submit an appeal. Each appeal is reviewed against the report details and your explanation.</p>
+      <div id="reports-list"></div>
+    </div>
+  </div>
+
+  <script>
+    const AUTH_URL = 'http://127.0.0.1:8001';
+    let token = localStorage.getItem('akshar_token');
+    let userId = localStorage.getItem('akshar_userId');
+    let deviceId = localStorage.getItem('akshar_deviceId') || ('web-' + Date.now());
+    localStorage.setItem('akshar_deviceId', deviceId);
+    let cameraReady = false;
+    let studioData = null;
+
+    const video = document.getElementById('risk-cam');
+    const canvas = document.createElement('canvas');
+    canvas.width = 8; canvas.height = 8;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const mCanvas = document.createElement('canvas');
+    mCanvas.width = 32; mCanvas.height = 32;
+    const mCtx = mCanvas.getContext('2d', { willReadFrequently: true });
+    const PASSIVE_MIN = 1.0, ACTIVE_MIN = 2.5;
+    const CHALLENGES = ['Turn head left then right', 'Nod up and down', 'Lean closer then back'];
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    if (!token || !userId) {
+      window.location.href = '/';
+    }
+
+    async function api(method, url, body) {
+      const resp = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.detail || resp.statusText);
+      return data;
+    }
+
+    async function waitForCamera(video, timeoutMs = 4000) {
+      const t0 = performance.now();
+      while (performance.now() - t0 < timeoutMs) {
+        if (video.videoWidth > 0 && video.videoHeight > 0) return true;
+        await sleep(100);
+      }
+      return false;
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+        video.srcObject = stream;
+        cameraReady = await waitForCamera(video);
+      } catch (e) {
+        document.getElementById('risk-status').textContent = 'Camera required: ' + e.message;
+      }
+    }
+
+    function motionFrame() {
+      if (!cameraReady || video.videoWidth === 0) return null;
+      mCtx.drawImage(video, 0, 0, 32, 32);
+      const px = mCtx.getImageData(0, 0, 32, 32).data;
+      const g = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) g[i] = 0.299*px[i*4]+0.587*px[i*4+1]+0.114*px[i*4+2];
+      return g;
+    }
+    function meanAbsDiff(a, b) {
+      let s = 0; for (let i = 0; i < a.length; i++) s += Math.abs(a[i]-b[i]); return s / a.length;
+    }
+    function captureHash() {
+      if (!cameraReady || video.videoWidth === 0) return null;
+      ctx.drawImage(video, 0, 0, 8, 8);
+      const px = ctx.getImageData(0, 0, 8, 8).data;
+      const lum = []; let sum = 0;
+      for (let i = 0; i < 64; i++) { const v = 0.299*px[i*4]+0.587*px[i*4+1]+0.114*px[i*4+2]; lum.push(v); sum += v; }
+      const avg = sum/64; let hex = '';
+      for (let nib = 0; nib < 16; nib++) {
+        let bits = 0; for (let b = 0; b < 4; b++) bits = (bits<<1)|(lum[nib*4+b] > avg ? 1 : 0);
+        hex += bits.toString(16);
+      }
+      return hex;
+    }
+
+    async function runHybridLiveness() {
+      const overlay = document.getElementById('risk-challenge-overlay');
+      const challengeText = document.getElementById('risk-challenge-text');
+      const challengeTimer = document.getElementById('risk-challenge-timer');
+      const statusEl = document.getElementById('risk-status');
+      try {
+        let prev = null, passivePeak = 0;
+        statusEl.textContent = 'Passive liveness — hold still...';
+        for (let i = 0; i < 8; i++) {
+          const g = motionFrame(); if (g && prev) passivePeak = Math.max(passivePeak, meanAbsDiff(g, prev));
+          if (g) prev = g; await sleep(130);
+        }
+        if (passivePeak < PASSIVE_MIN) throw new Error('Passive liveness failed — face the camera in good light');
+        const challenge = CHALLENGES[Math.floor(Math.random()*CHALLENGES.length)];
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+        challengeText.textContent = challenge + ' now';
+        statusEl.textContent = challenge + ' — move your head!';
+        prev = null; let activePeak = 0; const t0 = performance.now();
+        while (performance.now() - t0 < 6000) {
+          const g = motionFrame(); if (g && prev) activePeak = Math.max(activePeak, meanAbsDiff(g, prev));
+          if (g) prev = g;
+          challengeTimer.textContent = Math.ceil((6000 - (performance.now() - t0)) / 1000) + 's';
+          if (activePeak >= ACTIVE_MIN) break;
+          await sleep(110);
+        }
+        if (activePeak < ACTIVE_MIN) throw new Error('Active challenge failed — move your head more clearly');
+        const hash = captureHash();
+        if (!hash) throw new Error('Could not capture face');
+        return hash;
+      } finally {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+      }
+    }
+
+    function renderChecks(elId, checks) {
+      document.getElementById(elId).innerHTML = (checks || []).map(c => `
+        <div class="check">
+          <span>${c.label}<br><small style="color:#667">${c.detail||''}</small></span>
+          <span class="${c.pass?'pass':'fail'}">${c.pass?'OK':'—'} ${Math.round((c.score||0)*100)}%</span>
+        </div>`).join('');
+    }
+
+    function renderStudio(data) {
+      studioData = data;
+      const t = data.trust || {};
+      document.getElementById('trust-score').textContent = (t.score||0).toLocaleString() + ' / 10,000';
+      document.getElementById('trust-bar').style.width = ((t.score||0)/100) + '%';
+      const tierEl = document.getElementById('trust-tier');
+      tierEl.textContent = t.tier || '—';
+      tierEl.className = 'badge' + ((t.binding?.status === 'at_risk' || data.requiresRiskCheck) ? ' bad' : '');
+      document.getElementById('binding-summary').textContent =
+        (t.integrity?.verdict || '—') + ' · ' + (t.binding?.verdict || '—');
+      renderChecks('integrity-checks', t.integrity?.checks);
+      renderChecks('binding-checks', t.binding?.checks);
+
+      const a = data.analytics?.totals || {};
+      document.getElementById('analytics-stats').innerHTML = [
+        ['Posts', a.posts], ['Likes', a.likes], ['Dislikes', a.dislikes], ['Shares', a.shares]
+      ].map(([l,n]) => `<div class="stat"><div class="n">${n||0}</div><div class="l">${l}</div></div>`).join('');
+
+      const posts = data.analytics?.posts || [];
+      document.getElementById('posts-empty').classList.toggle('hidden', posts.length > 0);
+      document.getElementById('posts-table').innerHTML = posts.map(p => `
+        <tr>
+          <td>${escapeHtml((p.content||'').slice(0,60))}${(p.content||'').length>60?'…':''}</td>
+          <td>${p.likes}</td><td>${p.dislikes}</td><td>${p.shares}</td><td>${p.engagement}</td>
+        </tr>`).join('');
+
+      const reports = data.reports || [];
+      document.getElementById('reports-list').innerHTML = reports.length ? reports.map(r => {
+        const ap = r.appeal || {};
+        const canAppeal = r.status === 'upheld' && ap.status !== 'approved' && ap.status !== 'pending';
+        return `<div class="report">
+          <h4>${r.category} · <span class="${r.status==='upheld'?'fail':'pass'}">${r.status}</span></h4>
+          <p>${escapeHtml(r.reason)}</p>
+          <p style="margin-top:6px;font-size:12px;color:#667">Filed ${r.createdAt ? new Date(r.createdAt).toLocaleString() : '—'}</p>
+          ${ap.reviewNotes ? `<p style="margin-top:6px;font-size:12px;"><strong>Review:</strong> ${escapeHtml(ap.reviewNotes)}</p>` : ''}
+          ${canAppeal ? `<textarea id="appeal-${r.reportId}" placeholder="Explain why this report is incorrect (min 10 characters)..."></textarea>
+            <button class="btn btn-secondary" onclick="submitAppeal('${r.reportId}')">Submit appeal</button>
+            <p class="status" id="appeal-status-${r.reportId}"></p>` : ''}
+          ${ap.status === 'pending' ? '<p class="status">Appeal pending review...</p>' : ''}
+          ${ap.status === 'approved' ? '<p class="status good">Appeal approved — report dismissed</p>' : ''}
+          ${ap.status === 'rejected' ? '<p class="status bad">Appeal rejected — report upheld</p>' : ''}
+        </div>`;
+      }).join('') : '<p class="status">No reports on your account.</p>';
+
+      if (data.requiresRiskCheck) showRiskOverlay(data.riskReason);
+      else hideRiskOverlay();
+    }
+
+    function escapeHtml(t) {
+      const d = document.createElement('div'); d.textContent = t; return d.innerHTML;
+    }
+
+    function showRiskOverlay(reason) {
+      document.getElementById('risk-reason').textContent = reason || 'Complete identity verification to continue.';
+      document.getElementById('risk-overlay').classList.remove('hidden');
+    }
+    function hideRiskOverlay() {
+      document.getElementById('risk-overlay').classList.add('hidden');
+    }
+
+    async function loadStudio() {
+      const data = await api('GET', AUTH_URL + '/auth/studio/' + userId);
+      renderStudio(data);
+    }
+
+    async function completeRiskCheck() {
+      try {
+        document.getElementById('risk-status').textContent = 'Running verification...';
+        const hash = await runHybridLiveness();
+        const result = await api('POST', AUTH_URL + '/auth/reverify', { faceHash: hash, deviceId, livenessPassed: true });
+        if (result.passed && !result.requiresRiskCheck) {
+          document.getElementById('risk-status').textContent = 'Verification complete — thank you.';
+          document.getElementById('risk-status').className = 'status good';
+          await loadStudio();
+        } else {
+          const extra = result.attemptsRemaining != null ? ` (${result.attemptsRemaining} attempt(s) remaining)` : '';
+          throw new Error((result.riskReason || 'Verification failed — try again') + extra);
+        }
+      } catch (e) {
+        document.getElementById('risk-status').textContent = e.message;
+        document.getElementById('risk-status').className = 'status bad';
+      }
+    }
+
+    async function submitAppeal(reportId) {
+      const text = document.getElementById('appeal-' + reportId).value.trim();
+      const el = document.getElementById('appeal-status-' + reportId);
+      if (text.length < 10) { el.textContent = 'Appeal must be at least 10 characters'; el.className = 'status bad'; return; }
+      try {
+        el.textContent = 'Submitting appeal for review...';
+        await api('POST', AUTH_URL + '/auth/reports/' + reportId + '/appeal', { appealText: text });
+        el.textContent = 'Appeal reviewed — reload studio for outcome';
+        el.className = 'status good';
+        await loadStudio();
+      } catch (e) {
+        el.textContent = e.message;
+        el.className = 'status bad';
+      }
+    }
+
+    startCamera().then(loadStudio);
+  </script>
+</body>
+</html>
