@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { ai } from '../services/api';
 import type { DashboardMetrics } from '../types';
 import { TrustBadge } from '../components/TrustBadge';
@@ -43,7 +44,7 @@ export function ModeratorScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         testID="moderator-screen"
@@ -53,7 +54,7 @@ export function ModeratorScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerIconContainer}>
-            <Text style={styles.headerIcon}>🛡️</Text>
+            <Image source={require('../../assets/logo.png')} style={styles.headerLogo} />
           </View>
           <Text style={styles.title}>Moderator Node</Text>
           <Text style={styles.subtitle}>AI Threat & Trust Intelligence</Text>
@@ -146,10 +147,22 @@ export function ModeratorScreen() {
                 dashboard.flaggedAccounts.map((account, idx) => (
                   <View key={account.userId} style={[styles.flaggedRow, idx === dashboard.flaggedAccounts.length - 1 && { borderBottomWidth: 0, paddingBottom: 0 }]}>
                     <View style={styles.flaggedInfo}>
-                      <Text style={styles.flaggedId}>{account.userId.slice(0, 6)}...{account.userId.slice(-6)}</Text>
-                      <View style={styles.scoreBadge}>
-                        <Text style={styles.flaggedScore}>Trust: {Math.round(account.trust)}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={[styles.flaggedId, { marginBottom: 0 }]}>{account.userId.slice(0, 6)}...{account.userId.slice(-6)}</Text>
+                        {account.riskHold && (
+                          <View style={styles.riskHoldBadge}>
+                            <Text style={styles.riskHoldText}>RISK HOLD</Text>
+                          </View>
+                        )}
                       </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: account.riskReason ? 4 : 0 }}>
+                        <View style={styles.scoreBadge}>
+                          <Text style={styles.flaggedScore}>Trust: {Math.round(account.trust)}</Text>
+                        </View>
+                      </View>
+                      {account.riskReason ? (
+                        <Text style={styles.riskReasonText}>{account.riskReason}</Text>
+                      ) : null}
                     </View>
                     <TrustBadge tier={account.tier} size="small" />
                   </View>
@@ -187,7 +200,7 @@ export function ModeratorScreen() {
         
         <View style={{ height: 60 }} />
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -202,7 +215,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingTop: 60,
+    paddingTop: 20,
   },
   loadingText: {
     color: '#00E5FF',
@@ -217,23 +230,19 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   headerIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#111622',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#1C2333',
-    shadowColor: '#4A90E2',
-    shadowOffset: { width: 0, height: 8 },
+    borderRadius: 24,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
+    shadowRadius: 20,
+    elevation: 8,
   },
-  headerIcon: {
-    fontSize: 28,
+  headerLogo: {
+    width: 60,
+    height: 60,
+    resizeMode: 'contain',
+    borderRadius: 15,
   },
   title: {
     fontSize: 28,
@@ -306,15 +315,15 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#111622',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 24,
+    padding: 24,
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#1C2333',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowColor: '#00E5FF',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
     elevation: 8,
   },
   alertCard: {
@@ -430,6 +439,27 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier',
     fontWeight: '600',
     marginBottom: 6,
+  },
+  riskHoldBadge: {
+    backgroundColor: 'rgba(255, 75, 139, 0.15)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 75, 139, 0.3)',
+    marginLeft: 8,
+  },
+  riskHoldText: {
+    fontSize: 9,
+    color: '#FF4B8B',
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  riskReasonText: {
+    fontSize: 11,
+    color: '#FFB84C',
+    fontStyle: 'italic',
+    marginTop: 4,
   },
   scoreBadge: {
     backgroundColor: 'rgba(255, 184, 76, 0.1)',

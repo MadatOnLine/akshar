@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akshar Moderator Node</title>
+    <style>
+        :root {
+            --bg-dark: #000000;
+            --bg-card: #1C1C1E;
+            --text-main: #FFFFFF;
+            --text-muted: #8E8E93;
+            --accent-blue: #0A84FF;
+            --accent-red: #FF453A;
+            --accent-green: #30D158;
+            --accent-orange: #FF9F0A;
+            --border: #2C2C2E;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        h1 { margin: 0; font-weight: 700; }
+        .badge {
+            background-color: var(--accent-blue);
+            color: white;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background-color: var(--bg-card);
+            border-radius: 14px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 16px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+        .stat-label { color: var(--text-muted); }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+        }
+        th { color: var(--text-muted); font-size: 12px; text-transform: uppercase; }
+        
+        button {
+            background-color: var(--accent-blue);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        button.danger { background-color: var(--accent-red); }
+        button:hover { opacity: 0.9; }
+
+        input[type="text"], input[type="password"] {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 10px;
+        }
+        
+        /* Auth Overlay */
+        #auth-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-dark);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+        .auth-box {
+            background: var(--bg-card);
+            padding: 30px;
+            border-radius: 14px;
+            width: 300px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Auth Overlay -->
+    <div id="auth-overlay">
+        <div class="auth-box">
+            <h2>Moderator Access</h2>
+            <input type="password" id="service-key" placeholder="Enter Service API Key">
+            <button onclick="login()">Authenticate</button>
+            <p id="auth-error" style="color: var(--accent-red); display: none; margin-top: 10px; font-size: 14px;">Invalid key.</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <header>
+            <div>
+                <h1>Moderator Node</h1>
+                <span style="color: var(--text-muted)">Akshar AI Trust Service</span>
+            </div>
+            <span class="badge" id="status-badge">🟢 LIVE</span>
+        </header>
+
+        <div class="card-grid">
+            <!-- Stats -->
+            <div class="card">
+                <h2>Network Health</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Total Users</span>
+                    <span class="stat-value" id="total-users">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label" style="color: var(--accent-green)">Humans</span>
+                    <span class="stat-value" id="human-count">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label" style="color: var(--accent-red)">Bots Detected</span>
+                    <span class="stat-value" id="bot-count">-</span>
+                </div>
+            </div>
+
+            <!-- Tiers -->
+            <div class="card">
+                <h2>Trust Distribution</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Colony (>7.5k)</span>
+                    <span class="stat-value" id="colony-count">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Drone (4k-7.5k)</span>
+                    <span class="stat-value" id="drone-count">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Larva (<4k)</span>
+                    <span class="stat-value" id="larva-count">-</span>
+                </div>
+            </div>
+            
+            <!-- Thresholds -->
+            <div class="card">
+                <h2>AI Thresholds</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Bot Threshold</span>
+                    <input type="text" id="bot-thresh" style="width: 60px; margin-bottom:0;" value="0.75">
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Drift Threshold</span>
+                    <input type="text" id="drift-thresh" style="width: 60px; margin-bottom:0;" value="0.80">
+                </div>
+                <button onclick="updateThresholds()" style="width: 100%; margin-top: 10px;">Update</button>
+            </div>
+            
+            <!-- SVM / AI Diagnostics -->
+            <div class="card">
+                <h2>AI Diagnostics (SVM)</h2>
+                <div class="stat-row">
+                    <span class="stat-label">Stylometric SVM</span>
+                    <span class="stat-value" id="svm-status" style="font-size: 16px;">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Embedding Model</span>
+                    <span class="stat-value" id="emb-status" style="font-size: 16px;">-</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Model Engine</span>
+                    <span class="stat-value" id="model-name" style="font-size: 14px; color: var(--text-muted)">-</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 30px;">
+            <h2>Flagged Accounts (Risk or Low Trust)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>User ID</th>
+                        <th>Trust Score</th>
+                        <th>Tier</th>
+                        <th>Risk Reason</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="flagged-table">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Flagged Conversations (Drift)</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Conversation ID</th>
+                        <th>Risk Score</th>
+                        <th>Last Drift</th>
+                    </tr>
+                </thead>
+                <tbody id="conv-table">
+                    <!-- Populated by JS -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let apiKey = '';
+
+        async function login() {
+            const key = document.getElementById('service-key').value;
+            try {
+                const res = await fetch('/ai/dashboard', {
+                    headers: { 'x-service-key': key }
+                });
+                if (res.ok) {
+                    apiKey = key;
+                    document.getElementById('auth-overlay').style.display = 'none';
+                    refreshDashboard();
+                    setInterval(refreshDashboard, 5000); // Auto-refresh every 5s
+                } else {
+                    document.getElementById('auth-error').style.display = 'block';
+                }
+            } catch (e) {
+                alert('Connection error');
+            }
+        }
+
+        async function refreshDashboard() {
+            if (!apiKey) return;
+            try {
+                const res = await fetch('/ai/dashboard', {
+                    headers: { 'x-service-key': apiKey }
+                });
+                const data = await res.json();
+                
+                document.getElementById('total-users').innerText = data.totalUsers;
+                document.getElementById('human-count').innerText = data.humanCount;
+                document.getElementById('bot-count').innerText = data.botCount;
+                
+                document.getElementById('colony-count').innerText = data.usersByTier.colony || 0;
+                document.getElementById('drone-count').innerText = data.usersByTier.drone || 0;
+                document.getElementById('larva-count').innerText = data.usersByTier.larva || 0;
+
+                if (data.aiDiagnostics) {
+                    const svmEl = document.getElementById('svm-status');
+                    svmEl.innerText = data.aiDiagnostics.svmLoaded ? 'ACTIVE' : 'FALLBACK';
+                    svmEl.style.color = data.aiDiagnostics.svmLoaded ? 'var(--accent-green)' : 'var(--accent-orange)';
+                    
+                    const embEl = document.getElementById('emb-status');
+                    embEl.innerText = data.aiDiagnostics.embeddingModelLoaded ? 'ONLINE' : 'OFFLINE';
+                    embEl.style.color = data.aiDiagnostics.embeddingModelLoaded ? 'var(--accent-green)' : 'var(--accent-red)';
+                    
+                    document.getElementById('model-name').innerText = data.aiDiagnostics.modelName;
+                }
+
+                // Render Flagged Accounts
+                const flaggedHtml = data.flaggedAccounts.map(acc => `
+                    <tr>
+                        <td style="font-family: monospace">${acc.userId}</td>
+                        <td style="color: ${acc.trust < 1000 ? 'var(--accent-red)' : 'white'}">${Math.round(acc.trust)}</td>
+                        <td>${acc.tier}</td>
+                        <td style="color: var(--accent-orange)">${acc.riskReason || (acc.trust < 1000 ? 'Bot Behaviour' : 'Unknown')}</td>
+                        <td><button class="danger" onclick="banUser('${acc.userId}')">BAN</button></td>
+                    </tr>
+                `).join('');
+                document.getElementById('flagged-table').innerHTML = flaggedHtml || '<tr><td colspan="5">No flagged accounts</td></tr>';
+
+                // Render Flagged Conversations
+                const convHtml = data.flaggedConversations.map(c => `
+                    <tr>
+                        <td style="font-family: monospace">${c.conversationId}</td>
+                        <td style="color: var(--accent-orange)">${c.riskScore.toFixed(2)}</td>
+                        <td>${new Date(c.lastDrift * 1000).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+                document.getElementById('conv-table').innerHTML = convHtml || '<tr><td colspan="3">No flagged conversations</td></tr>';
+
+            } catch (e) {
+                console.error(e);
+            }
+        }
+
+        async function banUser(userId) {
+            if (!confirm(`Are you sure you want to ban ${userId}?`)) return;
+            const reason = prompt("Enter ban reason:", "Violated community guidelines (Moderator)");
+            if (!reason) return;
+
+            try {
+                const res = await fetch('/ai/ban', {
+                    method: 'POST',
+                    headers: { 
+                        'x-service-key': apiKey,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ userId, reason })
+                });
+                if (res.ok) {
+                    alert('User banned');
+                    refreshDashboard();
+                } else {
+                    const err = await res.json();
+                    alert(`Failed to ban: ${err.detail || 'Unknown error'}`);
+                }
+            } catch (e) {
+                alert('Connection error');
+            }
+        }
+
+        async function updateThresholds() {
+            const botThresh = parseFloat(document.getElementById('bot-thresh').value);
+            const driftThresh = parseFloat(document.getElementById('drift-thresh').value);
+            
+            if (isNaN(botThresh) || isNaN(driftThresh)) return alert('Invalid numbers');
+
+            await fetch('/ai/threshold', {
+                method: 'POST',
+                headers: { 'x-service-key': apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: "BOT_THRESHOLD", value: botThresh })
+            });
+            await fetch('/ai/threshold', {
+                method: 'POST',
+                headers: { 'x-service-key': apiKey, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: "DRIFT_THRESHOLD", value: driftThresh })
+            });
+            alert('Thresholds updated successfully');
+        }
+    </script>
+</body>
+</html>

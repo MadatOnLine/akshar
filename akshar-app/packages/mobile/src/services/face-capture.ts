@@ -139,6 +139,15 @@ async function startCamera(): Promise<void> {
  */
 export async function runHybridLiveness(onUpdate?: LivenessCallback): Promise<string | null> {
   if (!_cameraReady || !_getFrame32) {
+    if (__DEV__ && require('react-native').Platform.OS === 'ios') {
+      // iOS Simulator bypass since it doesn't support camera motion/passthrough
+      onUpdate?.({
+        stage: 'done', passiveStatus: 'ok', activeStatus: 'ok',
+        motionPercent: 100, challengeText: '', timerSeconds: 0,
+        statusMessage: 'iOS Simulator bypass.', statusKind: 'good',
+      });
+      return '1234567890abcdef'; // Dummy hash
+    }
     onUpdate?.({
       stage: 'passive', passiveStatus: 'fail', activeStatus: 'pending',
       motionPercent: 0, challengeText: '', timerSeconds: 0,
@@ -255,6 +264,15 @@ export async function runHybridLiveness(onUpdate?: LivenessCallback): Promise<st
  * This is the main entry point for screens.
  */
 export async function captureFaceWithLiveness(onUpdate?: LivenessCallback): Promise<string> {
+  if (__DEV__ && require('react-native').Platform.OS === 'ios') {
+    onUpdate?.({
+      stage: 'done', passiveStatus: 'ok', activeStatus: 'ok',
+      motionPercent: 100, challengeText: '', timerSeconds: 0,
+      statusMessage: 'iOS Simulator bypass.', statusKind: 'good',
+    });
+    return '1234567890abcdef'; // Dummy hash
+  }
+
   await startCamera();
   try {
     const hash = await runHybridLiveness(onUpdate);
@@ -272,6 +290,10 @@ export async function captureFaceWithLiveness(onUpdate?: LivenessCallback): Prom
  * Just grabs a frame and hashes it.
  */
 export async function captureHashOnly(): Promise<string> {
+  if (__DEV__ && require('react-native').Platform.OS === 'ios') {
+    return '1234567890abcdef'; // Dummy hash
+  }
+
   await startCamera();
   try {
     const hash = captureHash();

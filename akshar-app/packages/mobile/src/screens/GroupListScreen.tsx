@@ -1,7 +1,8 @@
 /**
  * GroupListScreen — list of user's encrypted groups.
+ * Redesigned to feel like Apple Messages / WhatsApp group list.
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,9 +12,33 @@ import {
   Alert,
   ActivityIndicator,
   RefreshControl,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { mesh } from '../services/api';
 import type { Group } from '../types';
+
+/* ── Avatar color palette (Apple-inspired pastels on dark) ──── */
+const AVATAR_COLORS = [
+  '#5E5CE6', // Indigo
+  '#BF5AF2', // Purple
+  '#FF375F', // Red
+  '#FF9F0A', // Orange
+  '#30D158', // Green
+  '#64D2FF', // Cyan
+  '#FF6482', // Pink
+  '#AC8E68', // Tan
+  '#0A84FF', // Blue
+  '#FFD60A', // Yellow
+];
+
+function getAvatarColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
 
 interface GroupListScreenProps {
   navigation: any;
@@ -23,6 +48,7 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const animatedValues = useRef<Animated.Value[]>([]).current;
 
   const loadGroups = useCallback(async () => {
     try {
@@ -39,6 +65,25 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
   useEffect(() => {
     loadGroups();
   }, [loadGroups]);
+
+  /* Staggered fade-in when groups load */
+  useEffect(() => {
+    if (groups.length > 0) {
+      // Ensure we have enough animated values
+      while (animatedValues.length < groups.length) {
+        animatedValues.push(new Animated.Value(0));
+      }
+      const animations = groups.map((_, i) =>
+        Animated.timing(animatedValues[i], {
+          toValue: 1,
+          duration: 350,
+          delay: i * 60,
+          useNativeDriver: true,
+        }),
+      );
+      Animated.stagger(60, animations).start();
+    }
+  }, [groups, animatedValues]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -69,48 +114,88 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
     );
   };
 
-  const renderItem = ({ item }: { item: Group }) => (
-    <TouchableOpacity
-      style={styles.groupItem}
-      onPress={() => navigateToChat(item)}
-      testID={`group-item-${item.groupId}`}
-      accessibilityLabel={`Open group ${item.name}`}
-    >
-      <View style={styles.groupIcon}>
-        <Text style={styles.groupEmoji}>{item.sealed ? '🔒' : '💬'}</Text>
-      </View>
-      <View style={styles.groupInfo}>
-        <Text style={styles.groupName}>{item.name}</Text>
-        <Text style={styles.groupMeta}>
-          {item.memberIds.length} members{item.sealed ? ' · Sealed' : ''}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item, index }: { item: Group; index: number }) => {
+    const avatarBg = getAvatarColor(item.name);
+    const initial = item.name.charAt(0).toUpperCase();
+    const anim = animatedValues[index] || new Animated.Value(1);
+
+    return (
+      <Animated.View
+        style={{
+          opacity: anim,
+          transform: [
+            {
+              translateY: anim.interpolate({
+                inputRange: [0, 1],
+                outputRange: [18, 0],
+              }),
+            },
+          ],
+        }}
+      >
+        <TouchableOpacity
+          style={styles.groupRow}
+          onPress={() => navigateToChat(item)}
+          activeOpacity={0.6}
+          testID={`group-item-${item.groupId}`}
+          accessibilityLabel={`Open group ${item.name}`}
+        >
+          {/* Avatar */}
+          <View style={[styles.avatar, { backgroundColor: avatarBg }]}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+
+          {/* Content */}
+          <View style={styles.groupInfo}>
+            <Text style={styles.groupName} numberOfLines={1}>
+              {item.name}
+            </Text>
+            <Text style={styles.groupSubtitle} numberOfLines={1}>
+              {item.memberIds.length} member{item.memberIds.length !== 1 ? 's' : ''} · End-to-end encrypted
+            </Text>
+          </View>
+
+          {/* Chevron */}
+          <Text style={styles.chevron}>›</Text>
+        </TouchableOpacity>
+
+        {/* Separator — inset like iOS */}
+        <View style={styles.separator} />
+      </Animated.View>
+    );
+  };
 
   const renderEmpty = () => {
     if (loading) {
       return (
         <View style={styles.emptyContainer}>
-          <ActivityIndicator size="large" color="#6d8cff" />
+          <ActivityIndicator size="large" color="#0A84FF" />
         </View>
       );
     }
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyEmoji}>🔐</Text>
-        <Text style={styles.emptyTitle}>No encrypted groups yet</Text>
-        <Text style={styles.emptySubtitle}>Tap + to create one</Text>
+        <Text style={styles.emptyTitle}>No conversations yet</Text>
+        <Text style={styles.emptySubtitle}>
+          Tap the compose button to start a new encrypted group.
+        </Text>
       </View>
     );
   };
 
   return (
-    <View style={styles.container} testID="group-list-screen">
+    <SafeAreaView style={styles.container} testID="group-list-screen">
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.headerEmoji}>🔐</Text>
-        <Text style={styles.headerTitle}>Encrypted Groups</Text>
+        <Text style={styles.headerTitle}>Messages</Text>
+      </View>
+
+      {/* Search bar (visual only) */}
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <Text style={styles.searchPlaceholder}>Search</Text>
+        </View>
       </View>
 
       <FlatList
@@ -122,136 +207,165 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#6d8cff"
-            colors={['#6d8cff']}
+            tintColor="#0A84FF"
+            colors={['#0A84FF']}
           />
         }
-        contentContainerStyle={groups.length === 0 ? styles.listEmpty : undefined}
+        contentContainerStyle={groups.length === 0 ? styles.listEmpty : styles.listContent}
+        showsVerticalScrollIndicator={false}
         testID="group-list"
       />
 
-      {/* FAB */}
+      {/* FAB — subtle compose button */}
       <TouchableOpacity
         style={styles.fab}
         onPress={handleCreateGroup}
+        activeOpacity={0.7}
         accessibilityLabel="Create new group"
         testID="group-create-fab"
       >
-        <Text style={styles.fabText}>+</Text>
+        <Text style={styles.fabIcon}>✏️</Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f1724',
+    backgroundColor: '#000000',
   },
 
-  /* Header */
+  /* ── Header ─────────────────────────────────────────── */
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-  },
-  headerEmoji: {
-    fontSize: 22,
-    marginRight: 10,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#e8ecf4',
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
   },
 
-  /* List */
+  /* ── Search bar ─────────────────────────────────────── */
+  searchContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1C1C1E',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  searchIcon: {
+    fontSize: 14,
+    marginRight: 8,
+  },
+  searchPlaceholder: {
+    fontSize: 16,
+    color: '#636366',
+    fontWeight: '400',
+  },
+
+  /* ── List ────────────────────────────────────────────── */
   listEmpty: {
     flexGrow: 1,
   },
+  listContent: {
+    paddingBottom: 100,
+  },
 
-  /* Group card */
-  groupItem: {
+  /* ── Group row (iOS-style) ──────────────────────────── */
+  groupRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginHorizontal: 16,
-    marginVertical: 6,
-    padding: 16,
-    backgroundColor: '#1c2433',
-    borderWidth: 1,
-    borderColor: '#283347',
-    borderRadius: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  groupIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#283347',
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 14,
   },
-  groupEmoji: {
-    fontSize: 24,
+  avatarText: {
+    fontSize: 22,
+    fontWeight: '600',
+    color: '#FFFFFF',
   },
   groupInfo: {
     flex: 1,
+    justifyContent: 'center',
   },
   groupName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '600',
-    color: '#e8ecf4',
+    color: '#FFFFFF',
+    marginBottom: 3,
   },
-  groupMeta: {
-    fontSize: 13,
-    color: '#667a99',
-    marginTop: 2,
+  groupSubtitle: {
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '400',
+  },
+  chevron: {
+    fontSize: 22,
+    color: '#48484A',
+    fontWeight: '300',
+    marginLeft: 8,
+  },
+  separator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#38383A',
+    marginLeft: 86, // Inset past avatar
   },
 
-  /* Empty state */
+  /* ── Empty state ────────────────────────────────────── */
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 48,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#e8ecf4',
-    marginBottom: 6,
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: '#667a99',
+    fontSize: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 
-  /* FAB */
+  /* ── FAB ─────────────────────────────────────────────── */
   fab: {
     position: 'absolute',
-    bottom: 28,
-    right: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#6d8cff',
+    bottom: 36,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0A84FF',
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#6d8cff',
+    shadowColor: '#0A84FF',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
   },
-  fabText: {
-    color: '#fff',
-    fontSize: 28,
-    fontWeight: '300',
+  fabIcon: {
+    fontSize: 20,
   },
 });

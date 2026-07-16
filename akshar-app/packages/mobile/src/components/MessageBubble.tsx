@@ -1,7 +1,8 @@
 /**
  * MessageBubble — displays a decrypted chat message with trust badge and bot indicator.
+ * Only renders plaintext messages (encrypted ones are filtered at the ChatScreen level).
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, memo } from 'react';
 import { View, Text, TouchableOpacity, Animated, StyleSheet } from 'react-native';
 import { TrustBadge } from './TrustBadge';
 import type { DecryptedMessage } from '../types';
@@ -11,24 +12,38 @@ interface MessageBubbleProps {
   isOwn: boolean;
   senderTier?: string;
   onShare?: () => void;
+  onReport?: () => void;
 }
 
-export function MessageBubble({ message, isOwn, senderTier, onShare }: MessageBubbleProps) {
+export const MessageBubble = memo(function MessageBubble({ message, isOwn, senderTier, onShare, onReport }: MessageBubbleProps) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
-    Animated.timing(fadeAnim, {
-      toValue: 1,
-      duration: 300,
-      useNativeDriver: true,
-    }).start();
-  }, [fadeAnim]);
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 60,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, scaleAnim]);
 
   const bubbleStyle = isOwn ? styles.ownBubble : styles.otherBubble;
 
   return (
     <Animated.View
-      style={[styles.container, isOwn && styles.containerOwn, { opacity: fadeAnim }]}
+      style={[
+        styles.container,
+        isOwn && styles.containerOwn,
+        { opacity: fadeAnim, transform: [{ scale: scaleAnim }] },
+      ]}
       testID={`message-bubble-${message.msgId}`}
     >
       {!isOwn && (
@@ -37,18 +52,11 @@ export function MessageBubble({ message, isOwn, senderTier, onShare }: MessageBu
           {senderTier && <TrustBadge tier={senderTier} size="small" />}
         </View>
       )}
-      <View style={[styles.bubble, bubbleStyle, message.decryptionFailed && styles.failedBubble]}>
-        {message.decryptionFailed ? (
-          <View style={styles.failedContainer}>
-            <Text style={styles.failedIcon}>🔒</Text>
-            <Text style={styles.failedText} numberOfLines={1}>
-              {message.text}
-            </Text>
-          </View>
-        ) : (
+      <TouchableOpacity activeOpacity={0.8} onLongPress={onReport} delayLongPress={500}>
+        <View style={[styles.bubble, bubbleStyle]}>
           <Text style={styles.text}>{message.text}</Text>
-        )}
-      </View>
+        </View>
+      </TouchableOpacity>
       <View style={styles.footer}>
         <Text style={styles.time}>
           {new Date(message.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -76,11 +84,11 @@ export function MessageBubble({ message, isOwn, senderTier, onShare }: MessageBu
       </View>
     </Animated.View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
-    marginVertical: 4,
+    marginVertical: 5,
     marginHorizontal: 12,
     maxWidth: '80%',
     alignSelf: 'flex-start',
@@ -92,7 +100,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 2,
+    marginBottom: 3,
   },
   sender: {
     fontSize: 12,
@@ -100,30 +108,38 @@ const styles = StyleSheet.create({
     color: '#6d8cff',
   },
   bubble: {
-    padding: 12,
-    borderRadius: 16,
+    paddingTop: 10,
+    paddingBottom: 12,
+    paddingHorizontal: 14,
+    borderRadius: 18,
     borderWidth: 1,
   },
   ownBubble: {
-    backgroundColor: '#1a2d4a',
-    borderColor: '#2a4060',
-    borderBottomRightRadius: 4,
+    backgroundColor: '#1a2d55',
+    borderColor: '#2a4a78',
+    borderBottomRightRadius: 6,
+    shadowColor: '#1a6dff',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
   },
   otherBubble: {
-    backgroundColor: '#1c2433',
-    borderColor: '#283347',
-    borderBottomLeftRadius: 4,
+    backgroundColor: '#1e2736',
+    borderColor: '#2a3548',
+    borderBottomLeftRadius: 6,
   },
   text: {
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 17,
+    lineHeight: 23,
     color: '#e8edf6',
+    letterSpacing: 0.1,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    marginTop: 2,
+    marginTop: 3,
   },
   time: {
     fontSize: 10,
@@ -151,24 +167,5 @@ const styles = StyleSheet.create({
   },
   shareIcon: {
     fontSize: 16,
-  },
-  failedBubble: {
-    backgroundColor: '#121722',
-    borderColor: '#1f2937',
-    borderStyle: 'dashed',
-  },
-  failedContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  failedIcon: {
-    fontSize: 12,
-  },
-  failedText: {
-    fontSize: 14,
-    color: '#566178',
-    fontStyle: 'italic',
-    maxWidth: 150,
   },
 });

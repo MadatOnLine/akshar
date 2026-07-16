@@ -15,8 +15,9 @@
  *   2. User taps button → runHybridLiveness (passive → active → captureHash)
  *   3. POST to server with hash
  */
-import React, { useState, useCallback, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Image, Animated } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Keychain from 'react-native-keychain';
 import { auth } from '../services/api';
 import { captureFaceWithLiveness, type LivenessState } from '../services/face-capture';
@@ -32,6 +33,15 @@ export function EnrollmentScreen() {
   const [deviceId] = useState(
     () => `device-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   );
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   // Liveness UI state — mirrors research DOM updates
   const [liveness, setLiveness] = useState<LivenessState>({
@@ -139,11 +149,16 @@ export function EnrollmentScreen() {
     status === 'ok' ? '#43d17a' : status === 'fail' ? '#ff6b6b' : status === 'pending' ? '#ffc66b' : '#44506a';
 
   return (
-    <ScrollView
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0c1018' }}>
+      <ScrollView
       style={styles.scroll}
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
+      <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }] }}>
+      <View style={styles.logoContainer}>
+        <Image source={require('../../assets/logo.png')} style={styles.logo} />
+      </View>
       <Text style={styles.title}>Sign in with your face</Text>
       <Text style={styles.description}>
         Tier 0 verification runs a <Text style={styles.bold}>hybrid liveness</Text> check
@@ -193,10 +208,10 @@ export function EnrollmentScreen() {
       </View>
 
       {/* Name field (research: .field) */}
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>Display name</Text>
+      <View style={{ marginBottom: 16 }}>
+        <Text style={{ fontSize: 13, color: '#8b97ad', marginBottom: 6, fontWeight: '600', paddingLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 }}>Display name</Text>
         <TextInput
-          style={[styles.fieldInput, isVerifying && styles.fieldDisabled]}
+          style={[styles.input, isVerifying && { opacity: 0.5 }]}
           placeholder="e.g. Sidd"
           placeholderTextColor="#44506a"
           value={name}
@@ -209,27 +224,27 @@ export function EnrollmentScreen() {
       </View>
 
       {/* Buttons (research: .btn-row) */}
-      <View style={[styles.btnRow, isVerifying && styles.btnRowDisabled]}>
+      <View style={[styles.btnGroup, isVerifying && styles.btnDisabled]}>
         <TouchableOpacity
-          style={[styles.btn, styles.btnPrimary]}
+          style={styles.btn}
           onPress={handleEnroll}
           disabled={isVerifying}
           accessibilityLabel="Create account and enroll face"
         >
-          <Text style={styles.btnPrimaryText}>Create account & enroll face</Text>
+          <Text style={styles.btnText}>Create account & enroll face</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={styles.btn}
+          style={styles.btnSecondary}
           onPress={handleLogin}
           disabled={isVerifying}
           accessibilityLabel="Log in with face"
         >
-          <Text style={styles.btnText}>Log in with face</Text>
+          <Text style={styles.btnSecondaryText}>Log in with face</Text>
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity onPress={handleResetDevice} disabled={isVerifying}>
-        <Text style={styles.resetLink}>Reset this device</Text>
+        <Text style={styles.resetText}>Reset this device</Text>
       </TouchableOpacity>
 
       {/* Status (research: #status) */}
@@ -242,180 +257,61 @@ export function EnrollmentScreen() {
           {liveness.statusMessage}
         </Text>
       )}
-    </ScrollView>
+      </Animated.View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: '#0c1018',
-  },
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#0c1018',
-    padding: 20,
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#e8edf6',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  description: {
-    fontSize: 13,
-    color: '#8b97ad',
-    textAlign: 'center',
-    marginBottom: 18,
-    lineHeight: 19,
-  },
-  bold: { fontWeight: '700', color: '#e8edf6' },
-
-  // Camera shell — renders LIVE camera feed
+  scroll: { flex: 1, backgroundColor: '#0c1018' },
+  container: { flexGrow: 1, padding: 24, justifyContent: 'center' },
+  logoContainer: { alignItems: 'center', marginBottom: 16 },
+  logo: { width: 56, height: 56, resizeMode: 'contain', borderRadius: 14 },
+  title: { fontSize: 28, fontWeight: '800', color: '#e8edf6', textAlign: 'center', marginBottom: 12, letterSpacing: -0.5 },
+  description: { fontSize: 14, color: '#8b97ad', textAlign: 'center', lineHeight: 22, marginBottom: 24, paddingHorizontal: 12 },
+  bold: { fontWeight: '700', color: '#c5d0e6' },
   camShell: {
     width: '100%',
-    aspectRatio: 4 / 3,
-    borderRadius: 14,
+    aspectRatio: 3 / 4,
+    borderRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#05080d',
     borderWidth: 1,
-    borderColor: '#283347',
-    position: 'relative',
-    marginBottom: 8,
+    borderColor: '#1f2a3d',
+    marginBottom: 24,
+    shadowColor: '#6d8cff',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  camShellVerifying: {
-    borderColor: '#58e1c0',
-    shadowColor: '#58e1c0',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-  },
-
-  // Live badge
-  liveBadge: {
-    position: 'absolute',
-    left: 10,
-    bottom: 16,
-    paddingVertical: 3,
-    paddingHorizontal: 9,
-    borderRadius: 999,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    borderWidth: 1,
-    borderColor: '#283347',
-    zIndex: 3,
-  },
+  camShellVerifying: { borderColor: '#58e1c0' },
+  liveBadge: { position: 'absolute', left: 16, bottom: 16, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 12, backgroundColor: 'rgba(0,0,0,0.6)', borderWidth: 1, borderColor: '#283347', zIndex: 3 },
   liveBadgeOn: { borderColor: '#43d17a' },
-  liveBadgeText: { fontSize: 12, color: '#8b97ad' },
+  liveBadgeText: { fontSize: 11, color: '#8b97ad', fontWeight: '700' },
   liveBadgeTextOn: { color: '#43d17a' },
-
-  // Challenge overlay
-  challengeOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'rgba(8,12,20,0.7)',
-    zIndex: 2,
-  },
-  challengeText: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: '#fff',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.8)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
-    paddingHorizontal: 16,
-  },
-  challengeTimer: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#58e1c0',
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 999,
-    paddingVertical: 4,
-    paddingHorizontal: 14,
-    overflow: 'hidden',
-  },
-
-  // Motion meter
-  motionMeter: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    zIndex: 3,
-  },
-  motionFill: {
-    height: '100%',
-    backgroundColor: '#6d8cff',
-  },
-
-  // Liveness steps
-  steps: { marginBottom: 14 },
-  stepRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginVertical: 3,
-    borderWidth: 1,
-    borderColor: '#283347',
-    borderRadius: 10,
-    backgroundColor: '#1c2433',
-  },
+  challengeOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: 'rgba(8,12,20,0.85)', zIndex: 2 },
+  challengeText: { fontSize: 24, fontWeight: '800', color: '#fff', textAlign: 'center', paddingHorizontal: 20 },
+  challengeTimer: { fontSize: 16, fontWeight: '700', color: '#58e1c0', backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 4, paddingHorizontal: 12, borderRadius: 99 },
+  motionMeter: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 4, backgroundColor: 'rgba(0,0,0,0.3)', zIndex: 3 },
+  motionFill: { height: '100%', backgroundColor: '#6d8cff' },
+  steps: { marginBottom: 24 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, marginVertical: 4, borderWidth: 1, borderColor: '#1f2a3d', borderRadius: 16, backgroundColor: '#141b28' },
   stepRowOk: { borderColor: '#43d17a' },
   stepRowFail: { borderColor: '#ff6b6b' },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  stepText: { fontSize: 14, color: '#8b97ad' },
-  stepSmall: { fontSize: 12, color: '#8b97ad', opacity: 0.8 },
-
-  // Name field
-  field: { marginBottom: 14 },
-  fieldLabel: { fontSize: 13, color: '#8b97ad', marginBottom: 6 },
-  fieldInput: {
-    width: '100%',
-    paddingVertical: 11,
-    paddingHorizontal: 13,
-    borderRadius: 10,
-    fontSize: 15,
-    backgroundColor: '#0e131d',
-    borderWidth: 1,
-    borderColor: '#283347',
-    color: '#e8edf6',
-  },
-  fieldDisabled: { opacity: 0.4 },
-
-  // Buttons
-  btnRow: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  btnRowDisabled: { opacity: 0.4 },
-  btn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#283347',
-    backgroundColor: '#1c2433',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 10,
-    alignItems: 'center',
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  btnPrimary: {
-    backgroundColor: '#6d8cff',
-    borderWidth: 0,
-  },
-  btnPrimaryText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  btnText: { color: '#e8edf6', fontSize: 14 },
-  resetLink: { color: '#8b97ad', fontSize: 13, textAlign: 'center', marginBottom: 8 },
-
-  // Status
-  status: { fontSize: 14, textAlign: 'center', color: '#8b97ad', minHeight: 20 },
+  dot: { width: 10, height: 10, borderRadius: 5 },
+  stepText: { fontSize: 14, color: '#8b97ad', fontWeight: '500' },
+  stepSmall: { fontSize: 12, opacity: 0.7 },
+  input: { backgroundColor: '#141b28', borderWidth: 1, borderColor: '#283347', borderRadius: 16, padding: 16, color: '#e8edf6', fontSize: 16, marginBottom: 16 },
+  btnGroup: { gap: 12 },
+  btn: { backgroundColor: '#6d8cff', paddingVertical: 16, borderRadius: 16, alignItems: 'center', minHeight: 56, justifyContent: 'center', shadowColor: '#6d8cff', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.25, shadowRadius: 12, elevation: 6 },
+  btnDisabled: { opacity: 0.5 },
+  btnText: { color: '#fff', fontWeight: '800', fontSize: 16, letterSpacing: 0.5 },
+  btnSecondary: { backgroundColor: '#1c2433', borderWidth: 1, borderColor: '#283347', paddingVertical: 16, borderRadius: 16, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
+  btnSecondaryText: { color: '#c5d0e6', fontWeight: '700', fontSize: 16 },
+  resetText: { color: '#667', fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 24, textDecorationLine: 'underline' },
+  status: { fontSize: 14, textAlign: 'center', marginTop: 16, minHeight: 20 },
   statusGood: { color: '#43d17a' },
   statusBad: { color: '#ff6b6b' },
 });

@@ -1,5 +1,6 @@
 /**
  * FeedScreen — public shared posts (Layer 2).
+ * Redesigned with clean social feed aesthetics.
  */
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
@@ -9,7 +10,9 @@ import {
   StyleSheet,
   Text,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FeedPostCard } from '../components/FeedPostCard';
 import { mesh } from '../services/api';
 import type { FeedPost } from '../types';
@@ -19,6 +22,7 @@ export function FeedScreen() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const headerOpacity = useRef(new Animated.Value(0)).current;
 
   /** Track reacted posts to prevent duplicate / spam reactions. */
   const reactedRef = useRef<Set<string>>(new Set());
@@ -42,6 +46,14 @@ export function FeedScreen() {
       loadFeed();
     }, [loadFeed])
   );
+
+  useEffect(() => {
+    Animated.timing(headerOpacity, {
+      toValue: 1,
+      duration: 500,
+      useNativeDriver: true,
+    }).start();
+  }, [headerOpacity]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -84,88 +96,107 @@ export function FeedScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer} testID="feed-loading">
-        <ActivityIndicator size="large" color="#6d8cff" />
+        <ActivityIndicator size="large" color="#0A84FF" />
       </View>
     );
   }
 
   /* ── Main feed ─────────────────────────────────────────── */
   return (
-    <View style={styles.container} testID="feed-screen">
+    <SafeAreaView style={styles.container} testID="feed-screen">
       {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerEmoji}>📡</Text>
-        <Text style={styles.headerTitle}>Public Feed</Text>
-      </View>
+      <Animated.View style={[styles.header, { opacity: headerOpacity }]}>
+        <Text style={styles.headerTitle}>Feed</Text>
+      </Animated.View>
 
       <FlatList
         data={posts}
         keyExtractor={item => item.postId}
         renderItem={({ item }) => (
-          <FeedPostCard
-            post={item}
-            onLike={() => handleLike(item.postId)}
-            onDislike={() => handleDislike(item.postId)}
-            onShare={() => handleShare(item.postId)}
-          />
+          <View style={styles.cardWrapper}>
+            <FeedPostCard
+              post={item}
+              onLike={() => handleLike(item.postId)}
+              onDislike={() => handleDislike(item.postId)}
+              onShare={() => handleShare(item.postId)}
+            />
+          </View>
         )}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor="#6d8cff"
-            colors={['#6d8cff']}
+            tintColor="#0A84FF"
+            colors={['#0A84FF']}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>📡</Text>
             <Text style={styles.emptyTitle}>No posts yet</Text>
-            <Text style={styles.emptySubtitle}>Share something from a group chat!</Text>
+            <Text style={styles.emptySubtitle}>
+              Share something from a group chat to see it here.
+            </Text>
           </View>
         }
-        contentContainerStyle={posts.length === 0 ? styles.listEmpty : undefined}
+        contentContainerStyle={posts.length === 0 ? styles.listEmpty : styles.listContent}
+        showsVerticalScrollIndicator={false}
+        ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
         testID="feed-list"
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f1724',
+    backgroundColor: '#000000',
   },
 
   /* Loading */
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0f1724',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   /* Header */
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 56,
-    paddingBottom: 16,
-  },
-  headerEmoji: {
-    fontSize: 22,
-    marginRight: 10,
+    paddingTop: 8,
+    paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#e8ecf4',
+    fontSize: 34,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
   },
 
   /* List */
   listEmpty: {
     flexGrow: 1,
+  },
+  listContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+  },
+
+  /* Card wrapper — gives each card breathing room + rounded corners */
+  cardWrapper: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+
+  itemSeparator: {
+    height: 14,
   },
 
   /* Empty state */
@@ -175,18 +206,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 48,
   },
-  emptyEmoji: {
-    fontSize: 48,
-    marginBottom: 16,
-  },
   emptyTitle: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#e8ecf4',
-    marginBottom: 6,
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   emptySubtitle: {
-    fontSize: 14,
-    color: '#667a99',
+    fontSize: 15,
+    color: '#8E8E93',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

@@ -174,6 +174,8 @@ export interface DashboardMetrics {
     userId: string;
     trust: number;
     tier: string;
+    riskHold?: boolean;
+    riskReason?: string;
   }[];
   flaggedConversations: any[];
   botCount: number;

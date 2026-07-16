@@ -35,6 +35,8 @@
 #import "rngesturehandler_codegenJSI.h"
 #import "rnscreens/rnscreens.h"
 #import "rnscreensJSI.h"
+#import "RNVisionCameraResizePluginSpec/RNVisionCameraResizePluginSpec.h"
+#import "RNVisionCameraResizePluginSpecJSI.h"
 #import "RNWorkletsSpec/RNWorkletsSpec.h"
 #import "RNWorkletsSpecJSI.h"
 #import "safeareacontext/safeareacontext.h"

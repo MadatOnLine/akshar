@@ -11,6 +11,7 @@ import {
   Modal,
   ActivityIndicator,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Keychain from 'react-native-keychain';
 import { auth } from '../services/api';
 import { captureFaceWithLiveness, type LivenessState } from '../services/face-capture';
@@ -75,8 +76,8 @@ export function RiskVerificationScreen({ visible, reason, onVerified }: Props) {
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="fullScreen">
-      <View style={styles.container}>
-        <Text style={styles.title}>Identity verification required</Text>
+      <SafeAreaView style={styles.container}>
+        <Text style={styles.title}>Account at risk</Text>
         <Text style={styles.reason}>{reason || 'Complete verification to continue using Akshar.'}</Text>
         <Text style={styles.warn}>This step cannot be skipped.</Text>
 
@@ -105,7 +106,7 @@ export function RiskVerificationScreen({ visible, reason, onVerified }: Props) {
         {status !== '' && (
           <Text style={[styles.status, status.includes('complete') && styles.statusGood]}>{status}</Text>
         )}
-      </View>
+      </SafeAreaView>
     </Modal>
   );
 }

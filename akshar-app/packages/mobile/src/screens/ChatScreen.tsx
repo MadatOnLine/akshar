@@ -1,8 +1,9 @@
 /**
  * ChatScreen — encrypted group messaging with real-time WebSocket.
- * Features ECDH Key Exchange, Hash Ratcheting, and AI classification.
+ * Features ECDH Key Exchange, Hash Ratcheting, AI classification,
+ * and local message persistence via Keychain.
  */
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -15,6 +16,7 @@ import {
   SafeAreaView,
   Alert,
 } from 'react-native';
+import * as Keychain from 'react-native-keychain';
 import { MessageBubble } from '../components/MessageBubble';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { useAuth } from '../providers/AuthProvider';
@@ -29,6 +31,36 @@ import type { RootStackParamList } from '../types';
 
 type ChatScreenProps = StackScreenProps<RootStackParamList, 'Chat'>;
 
+/* ── Local persistence helpers ──────────────────────────────── */
+const CHAT_KEYCHAIN_PREFIX = 'com.akshar.chat.';
+
+async function loadLocalMessages(groupId: string): Promise<DecryptedMessage[]> {
+  try {
+    const result = await Keychain.getGenericPassword({ service: `${CHAT_KEYCHAIN_PREFIX}${groupId}` });
+    if (result && result.password) {
+      return JSON.parse(result.password);
+    }
+  } catch {}
+  return [];
+}
+
+async function saveLocalMessages(groupId: string, messages: DecryptedMessage[]): Promise<void> {
+  try {
+    // Only persist our own plaintext messages (max 200 to keep storage lean)
+    const toSave = messages
+      .filter(m => !m.decryptionFailed && m.from === 'You')
+      .slice(-200);
+    await Keychain.setGenericPassword(
+      'messages',
+      JSON.stringify(toSave),
+      { service: `${CHAT_KEYCHAIN_PREFIX}${groupId}` },
+    );
+  } catch {}
+}
+
+/* ── Estimated row height for getItemLayout ─────────────────── */
+const ESTIMATED_ROW_HEIGHT = 72;
+
 export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const { userId } = useAuth();
   const { groupId, groupName } = route.params;
@@ -38,15 +70,32 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
   const [typingStartTs, setTypingStartTs] = useState(0);
   const [peerTyping, setPeerTyping] = useState(false);
   const [shareDialog, setShareDialog] = useState<{ msgId: string; text: string } | null>(null);
-  const [showRatcheted, setShowRatcheted] = useState(false);
-  
+
   const flatListRef = useRef<FlatList>(null);
   const [socket, setSocket] = useState<any>(null);
-  
+
   // Crypto State
   const myKeyPairRef = useRef(generateKeyPair());
   const peerKeysRef = useRef<Map<string, Uint8Array>>(new Map());
   const sharedKeyRef = useRef<Uint8Array | null>(null);
+
+  // ── Load persisted messages on mount ──
+  useEffect(() => {
+    (async () => {
+      const saved = await loadLocalMessages(groupId);
+      if (saved.length > 0) {
+        setMessages(saved);
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 50);
+      }
+    })();
+  }, [groupId]);
+
+  // ── Persist messages whenever they change ──
+  useEffect(() => {
+    if (messages.length > 0) {
+      saveLocalMessages(groupId, messages);
+    }
+  }, [messages, groupId]);
 
   useEffect(() => {
     const token = getToken();
@@ -58,11 +107,9 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
 
     newSocket.on('connect', () => {
       newSocket.emit('join-room', { groupId });
-      // Publish our ECDH public key
       newSocket.emit('publish-key', { publicKey: myKeyPairRef.current.publicKey });
 
-      // [Mock Peer for Testing] Automatically simulate a peer joining after 1.5s
-      // so the user can test the chat interface when alone.
+      // Mock peer for single-user testing
       setTimeout(() => {
         if (!sharedKeyRef.current) {
           try {
@@ -75,14 +122,11 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       }, 1500);
     });
 
-    // Listen for peer keys to establish ECDH shared secrets
     newSocket.on('peer-key', (data: { userId: string; publicKey: string }) => {
       if (data.userId !== userId) {
         try {
           const sharedSecret = deriveSharedKey(myKeyPairRef.current.privateKey, data.publicKey);
           peerKeysRef.current.set(data.userId, sharedSecret);
-          
-          // For MVP group chat, use the first peer's key as the active shared key
           if (!sharedKeyRef.current) {
             sharedKeyRef.current = sharedSecret;
             setKeysReady(true);
@@ -95,87 +139,119 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
 
     newSocket.on('backlog', (data: { groupId: string; messages: any[] }) => {
       if (data.groupId !== groupId) return;
-      
-      const decryptedMessages: DecryptedMessage[] = data.messages.map(msg => {
-        let text = msg.ciphertext?.val || msg.val || 'encrypted data';
-        let decryptionFailed = true;
-        if (sharedKeyRef.current) {
-          const dec = decrypt(
-            sharedKeyRef.current,
-            msg.ciphertext?.nonce || msg.nonce,
-            msg.ciphertext?.tag || msg.tag,
-            msg.ciphertext?.val || msg.val
-          );
-          if (dec) {
-            text = dec;
-            decryptionFailed = false;
+
+      setMessages(prev => {
+        const newMessages = [...prev];
+
+        data.messages.forEach(msg => {
+          const existingIdx = newMessages.findIndex(p => p.msgId === msg.msgId);
+          if (existingIdx !== -1 && !newMessages[existingIdx].decryptionFailed) {
+            return;
           }
-        }
-        
-        return {
-          msgId: msg.msgId,
-          from: msg.fromNode === userId ? 'You' : 'Peer',
-          fromId: msg.fromNode,
-          text,
-          ts: msg.ts,
-          classification: msg.classification,
-          senderTier: msg.classification?.tier,
-          decryptionFailed,
-        };
+
+          let text = msg.ciphertext?.val || msg.val || 'encrypted data';
+          let decryptionFailed = true;
+          if (sharedKeyRef.current) {
+            try {
+              const dec = decrypt(
+                sharedKeyRef.current,
+                msg.ciphertext?.nonce || msg.nonce,
+                msg.ciphertext?.tag || msg.tag,
+                msg.ciphertext?.val || msg.val
+              );
+              if (dec) {
+                text = dec;
+                decryptionFailed = false;
+              }
+            } catch (err) {}
+          }
+
+          // Skip own messages that failed decryption — we have plaintext locally
+          if (msg.fromNode === userId && decryptionFailed) {
+            return;
+          }
+
+          const newMsg = {
+            msgId: msg.msgId,
+            from: msg.fromNode === userId ? 'You' : 'Peer',
+            fromId: msg.fromNode,
+            text,
+            ts: msg.ts,
+            classification: msg.classification,
+            senderTier: msg.classification?.tier,
+            decryptionFailed,
+          };
+
+          if (existingIdx !== -1) {
+            newMessages[existingIdx] = newMsg;
+          } else {
+            newMessages.push(newMsg);
+          }
+        });
+
+        newMessages.sort((a, b) => a.ts - b.ts);
+        return newMessages;
       });
-      
-      setMessages(decryptedMessages);
+
       setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
     });
 
     newSocket.on('new-message', (msg: any) => {
       if (msg.toNode !== groupId) return;
-      
-      const incomingNonce = msg.ciphertext?.nonce || msg.nonce;
 
       setMessages(prev => {
-        // Find if this is an echo of our own message by matching the nonce
-        const isEcho = prev.findIndex(p => p.nonce === incomingNonce);
-        if (isEcho !== -1) {
-          // Update the local message with the server's msgId and classification
-          const updated = [...prev];
-          updated[isEcho] = {
-            ...updated[isEcho],
-            msgId: msg.msgId,
-            ts: msg.ts,
-            classification: msg.classification,
-            senderTier: msg.classification?.tier,
-          };
-          return updated;
+        if (msg.fromNode === userId) {
+          const unconfirmedIdx = prev.findIndex(p => {
+            if (p.msgId.startsWith('msg-')) return true;
+            const echoNonce = msg.ciphertext?.nonce || msg.nonce;
+            if (p.nonce && echoNonce && p.nonce === echoNonce) return true;
+            return false;
+          });
+          if (unconfirmedIdx !== -1) {
+            const updated = [...prev];
+            updated[unconfirmedIdx] = {
+              ...updated[unconfirmedIdx],
+              msgId: msg.msgId,
+              ts: msg.ts,
+              classification: msg.classification,
+              senderTier: msg.classification?.tier,
+            };
+            return updated;
+          }
+          return prev;
         }
 
         let text = msg.ciphertext?.val || msg.val || 'encrypted data';
         let decryptionFailed = true;
         if (sharedKeyRef.current) {
-          const dec = decrypt(
-            sharedKeyRef.current,
-            msg.ciphertext?.nonce || msg.nonce,
-            msg.ciphertext?.tag || msg.tag,
-            msg.ciphertext?.val || msg.val
-          );
-          if (dec) {
-            text = dec;
-            decryptionFailed = false;
+          try {
+            const dec = decrypt(
+              sharedKeyRef.current,
+              msg.ciphertext?.nonce || msg.nonce,
+              msg.ciphertext?.tag || msg.tag,
+              msg.ciphertext?.val || msg.val
+            );
+            if (dec) {
+              text = dec;
+              decryptionFailed = false;
+              sharedKeyRef.current = ratchetKey(sharedKeyRef.current);
+            }
+          } catch (err) {
+            console.error('Decryption error:', err);
           }
         }
-        
+
         if (prev.some(p => p.msgId === msg.msgId)) return prev;
-        
+
         const newMsg: DecryptedMessage = {
           msgId: msg.msgId,
-          from: msg.fromNode === userId ? 'You' : 'Peer',
+          from: 'Peer',
           fromId: msg.fromNode,
           text,
           ts: msg.ts,
           classification: msg.classification,
           senderTier: msg.classification?.tier,
           decryptionFailed,
-          nonce: incomingNonce,
         };
         return [...prev, newMsg];
       });
@@ -204,14 +280,14 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     };
   }, [groupId, userId]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!inputText.trim() || !keysReady || !sharedKeyRef.current || !socket) return;
 
     const typingMs = typingStartTs > 0 ? Date.now() - typingStartTs : 0;
     const textToSend = inputText.trim();
     const ts = Date.now();
     const tempMsgId = `msg-${ts}`;
-    
+
     const ciphertext = encrypt(sharedKeyRef.current, textToSend);
 
     const msg: DecryptedMessage = {
@@ -220,30 +296,25 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
       fromId: userId || '',
       text: textToSend,
       ts: ts,
-      nonce: ciphertext.nonce, // Attach nonce for deduplication
+      nonce: ciphertext.nonce,
     };
 
     socket.emit('send-message', {
       groupId,
       ciphertext,
       typingMs,
-      plaintext: textToSend, // Kept for AI classification per user request
+      plaintext: textToSend,
     });
 
-    // Ratchet the key after sending to ensure Forward Secrecy
     sharedKeyRef.current = ratchetKey(sharedKeyRef.current);
-    
-    // Show Ratchet Indicator briefly
-    setShowRatcheted(true);
-    setTimeout(() => setShowRatcheted(false), 2000);
 
     setMessages(prev => [...prev, msg]);
     setInputText('');
     setTypingStartTs(0);
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
-  };
+  }, [inputText, keysReady, socket, typingStartTs, groupId, userId]);
 
-  const handleTextChange = (text: string) => {
+  const handleTextChange = useCallback((text: string) => {
     if (typingStartTs === 0 && text.length > 0) {
       setTypingStartTs(Date.now());
     }
@@ -251,13 +322,13 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     if (socket) {
       socket.emit('user-typing', { groupId });
     }
-  };
+  }, [typingStartTs, socket, groupId]);
 
-  const handleShare = (msgId: string, text: string) => {
+  const handleShare = useCallback((msgId: string, text: string) => {
     setShareDialog({ msgId, text });
-  };
+  }, []);
 
-  const confirmShare = async () => {
+  const confirmShare = useCallback(async () => {
     if (!shareDialog) return;
     try {
       await mesh.shareToFeed(groupId, shareDialog.msgId, shareDialog.text, userId || undefined);
@@ -268,18 +339,62 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
     } finally {
       setShareDialog(null);
     }
-  };
+  }, [shareDialog, groupId, userId]);
+
+  const handleReport = useCallback((msgId: string, fromId: string) => {
+    if (fromId === userId) return; // Can't report yourself
+    Alert.alert(
+      'Report Message',
+      'Are you sure you want to report this message to the AI moderator? This will flag the sender\'s account for Tier 2 evaluation.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Report', 
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await mesh.reportMessage(fromId, msgId, 'User reported malicious content via long-press');
+              Alert.alert('Reported', 'The message has been flagged for AI review.');
+            } catch (err: any) {
+              Alert.alert('Report Failed', err.message || 'Unknown error occurred');
+            }
+          }
+        }
+      ]
+    );
+  }, [userId]);
+
+  // Filter out encrypted gibberish
+  const visibleMessages = messages.filter(m => !m.decryptionFailed);
+
+  const renderItem = useCallback(({ item }: { item: DecryptedMessage }) => (
+    <MessageBubble
+      message={item}
+      isOwn={item.fromId === userId}
+      senderTier={item.senderTier}
+      onShare={() => handleShare(item.msgId, item.text)}
+      onReport={() => handleReport(item.msgId, item.fromId)}
+    />
+  ), [userId, handleShare, handleReport]);
+
+  const keyExtractor = useCallback((item: DecryptedMessage) => item.msgId, []);
+
+  const getItemLayout = useCallback((_: any, index: number) => ({
+    length: ESTIMATED_ROW_HEIGHT,
+    offset: ESTIMATED_ROW_HEIGHT * index,
+    index,
+  }), []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <KeyboardAvoidingView 
-        style={styles.container} 
+      <KeyboardAvoidingView
+        style={styles.container}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Text style={styles.backButtonText}>←</Text>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} activeOpacity={0.6}>
+            <Text style={styles.backButtonText}>‹</Text>
           </TouchableOpacity>
           <Text style={styles.headerTitle} numberOfLines={1}>{groupName}</Text>
           <View style={styles.headerRight} />
@@ -287,34 +402,28 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
 
         <FlatList
           ref={flatListRef}
-          data={messages}
-          keyExtractor={item => item.msgId}
-          renderItem={({ item }) => (
-            <MessageBubble
-              message={item}
-              isOwn={item.fromId === userId}
-              senderTier={item.senderTier}
-              onShare={() => handleShare(item.msgId, item.text)}
-            />
-          )}
+          data={visibleMessages}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          getItemLayout={getItemLayout}
           style={styles.messageList}
           testID="chat-message-list"
+          initialNumToRender={15}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>💬</Text>
+              <Text style={styles.emptyTitle}>No messages yet</Text>
+              <Text style={styles.emptySubtitle}>Say something to get started</Text>
+            </View>
+          }
           ListFooterComponent={
-            peerTyping ? <Text style={styles.typingIndicator}>... typing</Text> : null
+            peerTyping ? <Text style={styles.typingIndicator}>typing...</Text> : null
           }
         />
-
-        {showRatcheted && (
-          <View style={styles.ratchetOverlay}>
-            <Text style={styles.ratchetText}>🔑 Key Ratcheted</Text>
-          </View>
-        )}
-
-        <View style={styles.statusOverlay}>
-          <Text style={[styles.statusText, keysReady ? styles.statusReady : styles.statusWaiting]}>
-            {keysReady ? 'ECDH Key Exchange Complete ✓' : 'Waiting for peer keys...'}
-          </Text>
-        </View>
 
         <View style={styles.inputContainer}>
           <TextInput
@@ -322,7 +431,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             value={inputText}
             onChangeText={handleTextChange}
             placeholder="Message"
-            placeholderTextColor="#566178"
+            placeholderTextColor="#636366"
             maxLength={5000}
             editable={keysReady}
             multiline
@@ -332,10 +441,11 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             style={[styles.sendButton, (!inputText.trim() || !keysReady) && styles.sendDisabled]}
             onPress={handleSend}
             disabled={!inputText.trim() || !keysReady}
+            activeOpacity={0.7}
             accessibilityLabel="Send message"
             testID="chat-send-button"
           >
-            <Text style={[styles.sendText, (!inputText.trim() || !keysReady) && styles.sendTextDisabled]}>✈</Text>
+            <Text style={[styles.sendText, (!inputText.trim() || !keysReady) && styles.sendTextDisabled]}>↑</Text>
           </TouchableOpacity>
         </View>
 
@@ -353,25 +463,58 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#0c1018' },
-  container: { flex: 1, backgroundColor: '#0c1018' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 16, backgroundColor: '#0e131d', borderBottomWidth: 1, borderBottomColor: '#283347' },
-  backButton: { marginRight: 16, paddingVertical: 4 },
-  backButtonText: { color: '#6d8cff', fontSize: 24, fontWeight: '600' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: '#e8edf6', textAlign: 'center' },
-  headerRight: { width: 50 }, // For balancing the title
-  messageList: { flex: 1, paddingVertical: 8, backgroundColor: '#0c1018' },
-  inputContainer: { flexDirection: 'row', padding: 12, paddingBottom: 16, backgroundColor: '#1c2433', borderTopWidth: 1, borderTopColor: '#283347', alignItems: 'flex-end' },
-  input: { flex: 1, borderWidth: 1, borderColor: '#283347', borderRadius: 20, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 12, fontSize: 16, maxHeight: 100, color: '#e8edf6' },
-  sendButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#6d8cff', justifyContent: 'center', alignItems: 'center', marginLeft: 12, marginBottom: 2 },
-  sendDisabled: { backgroundColor: '#1c2433', borderWidth: 1, borderColor: '#283347' },
-  sendText: { color: '#FFF', fontSize: 20, fontWeight: '700' },
-  sendTextDisabled: { color: '#566178' },
-  statusOverlay: { padding: 4, backgroundColor: '#0e131d', alignItems: 'center' },
-  statusText: { fontSize: 12, fontWeight: '600' },
-  statusReady: { color: '#43d17a' },
-  statusWaiting: { color: '#ffc66b' },
-  ratchetOverlay: { position: 'absolute', bottom: 80, left: 0, right: 0, alignItems: 'center' },
-  ratchetText: { backgroundColor: 'rgba(109,140,255,0.2)', color: '#6d8cff', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, fontSize: 12, overflow: 'hidden' },
-  typingIndicator: { color: '#566178', fontSize: 14, fontStyle: 'italic', paddingHorizontal: 16, paddingVertical: 8 },
+  safeArea: { flex: 1, backgroundColor: '#000000' },
+  container: { flex: 1, backgroundColor: '#000000' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 4,
+    backgroundColor: '#000000',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#1C1C1E',
+  },
+  backButton: { paddingHorizontal: 12, paddingVertical: 6 },
+  backButtonText: { color: '#0A84FF', fontSize: 34, fontWeight: '300' },
+  headerTitle: { flex: 1, fontSize: 17, fontWeight: '600', color: '#FFFFFF', textAlign: 'center', marginRight: 36 },
+  headerRight: { width: 24 },
+  messageList: { flex: 1, paddingVertical: 8, backgroundColor: '#000000' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 120 },
+  emptyIcon: { fontSize: 48, marginBottom: 12 },
+  emptyTitle: { fontSize: 20, fontWeight: '600', color: '#FFFFFF', marginBottom: 6 },
+  emptySubtitle: { fontSize: 15, color: '#8E8E93' },
+  inputContainer: {
+    flexDirection: 'row',
+    padding: 10,
+    paddingBottom: Platform.OS === 'ios' ? 14 : 10,
+    backgroundColor: '#000000',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#1C1C1E',
+    alignItems: 'flex-end',
+  },
+  input: {
+    flex: 1,
+    backgroundColor: '#1C1C1E',
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 16,
+    maxHeight: 100,
+    color: '#FFFFFF',
+  },
+  sendButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#0A84FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+    marginBottom: 1,
+  },
+  sendDisabled: { backgroundColor: '#1C1C1E' },
+  sendText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
+  sendTextDisabled: { color: '#48484A' },
+  typingIndicator: { color: '#8E8E93', fontSize: 13, fontStyle: 'italic', paddingHorizontal: 16, paddingVertical: 6 },
 });

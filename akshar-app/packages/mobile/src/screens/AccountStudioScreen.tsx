@@ -1,7 +1,7 @@
 /**
  * AccountStudioScreen — trust snapshot, post analytics, reports & appeals.
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,10 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Image,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth } from '../services/api';
 import { useAuth } from '../providers/AuthProvider';
 import { RiskVerificationScreen } from './RiskVerificationScreen';
@@ -46,6 +49,15 @@ export function AccountStudioScreen({ navigation }: Props) {
   const [appealTexts, setAppealTexts] = useState<Record<string, string>>({});
   const [appealStatus, setAppealStatus] = useState<Record<string, string>>({});
   const [showRisk, setShowRisk] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+  }, [fadeAnim]);
 
   const loadStudio = useCallback(async () => {
     if (!userId) return;
@@ -128,23 +140,30 @@ export function AccountStudioScreen({ navigation }: Props) {
   const a = data?.analytics?.totals;
 
   return (
-    <>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#090b10' }}>
       <ScrollView style={styles.scroll} contentContainerStyle={styles.container}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.back}>
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Account Studio</Text>
-        <Text style={styles.sub}>Trust snapshot, analytics, and reports — no trust history shown.</Text>
+        <View style={styles.headerContainer}>
+          <View style={styles.headerTitleRow}>
+            <Image source={require('../../assets/logo.png')} style={styles.headerLogo} />
+            <View>
+              <Text style={styles.title}>Account Studio</Text>
+              <Text style={styles.sub}>Trust snapshot, analytics, and reports</Text>
+            </View>
+          </View>
+        </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Trust score</Text>
+        <Animated.View style={[styles.card, styles.heroCard, { opacity: fadeAnim, transform: [{ scale: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }] }]}>
+          <Text style={styles.heroLabel}>Trust score</Text>
           <Text style={styles.trustBig}>{(t?.score || 0).toLocaleString()} / 10,000</Text>
-          <Text style={styles.tierText}>{t?.tier || '—'}</Text>
-          <Text style={styles.muted}>
+          <Text style={styles.heroTier}>{t?.tier || '—'}</Text>
+          <Text style={styles.heroMuted}>
             {(t?.integrity?.verdict || '—')} · {(t?.binding?.verdict || '—')}
           </Text>
-        </View>
+        </Animated.View>
 
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Account integrity</Text>
@@ -197,83 +216,112 @@ export function AccountStudioScreen({ navigation }: Props) {
           await checkRisk();
         }}
       />
-    </>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: '#0c1018' },
+  scroll: { flex: 1, backgroundColor: '#090b10' },
   container: { padding: 20, paddingBottom: 40 },
-  center: { flex: 1, backgroundColor: '#0c1018', alignItems: 'center', justifyContent: 'center' },
-  back: { marginBottom: 8 },
-  backText: { color: '#6d8cff', fontSize: 15 },
-  title: { fontSize: 24, fontWeight: '800', color: '#e8edf6', marginBottom: 4 },
-  sub: { fontSize: 13, color: '#8b97ad', marginBottom: 16, lineHeight: 18 },
-  card: {
-    backgroundColor: '#141b28',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#283347',
-    padding: 16,
-    marginBottom: 12,
+  center: { flex: 1, backgroundColor: '#090b10', alignItems: 'center', justifyContent: 'center' },
+  back: { marginBottom: 16 },
+  backText: { color: '#6d8cff', fontSize: 16, fontWeight: '600' },
+  headerContainer: {
+    marginBottom: 24,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1c2433',
   },
-  cardLabel: { fontSize: 14, fontWeight: '700', color: '#c5d0e6', marginBottom: 10 },
-  trustBig: { fontSize: 30, fontWeight: '800', color: '#e8edf6' },
-  tierText: { fontSize: 14, color: '#aeb9cb', marginTop: 4 },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerLogo: {
+    width: 52,
+    height: 52,
+    resizeMode: 'contain',
+    borderRadius: 12,
+  },
+  title: { fontSize: 26, fontWeight: '900', color: '#ffffff', letterSpacing: 0.5 },
+  sub: { fontSize: 13, color: '#8b97ad', marginTop: 4, fontWeight: '500' },
+  card: {
+    backgroundColor: '#121824',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1f2a3d',
+    padding: 20,
+    marginBottom: 16,
+  },
+  heroCard: {
+    backgroundColor: '#182030',
+    borderColor: '#2d3a54',
+    shadowColor: '#6d8cff',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroLabel: { fontSize: 13, fontWeight: '800', color: '#8b97ad', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 },
+  cardLabel: { fontSize: 15, fontWeight: '800', color: '#c5d0e6', marginBottom: 16, letterSpacing: 0.5 },
+  trustBig: { fontSize: 40, fontWeight: '900', color: '#ffffff', textShadowColor: 'rgba(109, 140, 255, 0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+  heroTier: { fontSize: 16, color: '#43d17a', fontWeight: '700', marginTop: 6 },
+  heroMuted: { fontSize: 13, color: '#8b97ad', marginTop: 8, fontWeight: '500' },
   muted: { fontSize: 12, color: '#8b97ad', marginTop: 6, lineHeight: 17 },
   checkRow: {
     flexDirection: 'row',
-    paddingVertical: 8,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1f2a3d',
+    borderBottomColor: '#1a2230',
   },
-  checkLabel: { fontSize: 13, color: '#e8edf6' },
-  checkDetail: { fontSize: 11, color: '#667', marginTop: 2 },
-  checkResult: { fontSize: 12, fontWeight: '700', marginLeft: 8 },
+  checkLabel: { fontSize: 14, color: '#e8edf6', fontWeight: '600' },
+  checkDetail: { fontSize: 12, color: '#6a7891', marginTop: 4 },
+  checkResult: { fontSize: 13, fontWeight: '800', marginLeft: 12, alignSelf: 'center' },
   pass: { color: '#43d17a' },
   fail: { color: '#ff6b6b' },
-  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
+  statRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
   stat: {
     flex: 1,
     minWidth: 70,
-    backgroundColor: '#0e131d',
-    borderRadius: 8,
-    padding: 10,
+    backgroundColor: '#0a0d14',
+    borderRadius: 12,
+    padding: 14,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1c2433',
   },
-  statN: { fontSize: 18, fontWeight: '800', color: '#e8edf6' },
-  statL: { fontSize: 11, color: '#8b97ad', marginTop: 2 },
-  postRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#1f2a3d' },
-  postContent: { fontSize: 13, color: '#e8edf6', marginBottom: 4 },
+  statN: { fontSize: 20, fontWeight: '900', color: '#ffffff' },
+  statL: { fontSize: 11, color: '#8b97ad', marginTop: 4, textTransform: 'uppercase', fontWeight: '700' },
+  postRow: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#1a2230' },
+  postContent: { fontSize: 14, color: '#c5d0e6', marginBottom: 6, lineHeight: 20 },
   report: {
-    backgroundColor: '#0e131d',
-    borderRadius: 10,
+    backgroundColor: '#0a0d14',
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#283347',
-    padding: 12,
-    marginTop: 10,
+    borderColor: '#1c2433',
+    padding: 16,
+    marginTop: 12,
   },
-  reportTitle: { fontSize: 14, fontWeight: '700', color: '#e8edf6', marginBottom: 6 },
-  reportReason: { fontSize: 13, color: '#9aa8c0', lineHeight: 18 },
+  reportTitle: { fontSize: 15, fontWeight: '800', color: '#e8edf6', marginBottom: 8 },
+  reportReason: { fontSize: 14, color: '#aeb9cb', lineHeight: 20 },
   appealInput: {
-    marginTop: 8,
-    minHeight: 72,
+    marginTop: 12,
+    minHeight: 80,
     borderWidth: 1,
-    borderColor: '#283347',
-    borderRadius: 8,
-    padding: 10,
+    borderColor: '#2d3a54',
+    borderRadius: 10,
+    padding: 12,
     color: '#e8edf6',
-    backgroundColor: '#0c1018',
+    backgroundColor: '#090b10',
     textAlignVertical: 'top',
+    fontSize: 14,
   },
   appealBtn: {
-    marginTop: 8,
-    backgroundColor: '#1c2433',
-    borderWidth: 1,
-    borderColor: '#283347',
-    paddingVertical: 10,
-    borderRadius: 8,
+    marginTop: 12,
+    backgroundColor: '#6d8cff',
+    paddingVertical: 12,
+    borderRadius: 10,
     alignItems: 'center',
   },
-  appealBtnText: { color: '#e8edf6', fontWeight: '600' },
+  appealBtnText: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
 });

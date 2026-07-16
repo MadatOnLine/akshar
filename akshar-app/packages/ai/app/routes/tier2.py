@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.config import SERVICE_API_KEY, TIER2_BOOST_HUMANNESS, TIER2_OVERDUE_HUMANNESS
 from app.db.couch_client import db
@@ -23,6 +23,11 @@ class Tier2ProcessRequest(BaseModel):
     deviceOk: bool | None = None
     livenessPassed: bool | None = None
     mode: str = "reauth"  # reauth | overdue | failed_reauth
+
+class ReportRequest(BaseModel):
+    reportedUserId: str = Field(..., min_length=1)
+    messageId: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=1)
 
 
 def _humanness_for_mode(mode: str, checks: list[dict], combined: float) -> float:
@@ -131,3 +136,21 @@ async def process_tier2(user_id: str, body: Tier2ProcessRequest, x_service_key: 
         "checks": checks,
         "tier2Status": tier2["status"],
     }
+
+@router.post("/tier2/report")
+async def report_user(body: ReportRequest, x_service_key: str | None = Header(None)):
+    """Report a user for malicious behavior, placing them under a risk hold for moderators."""
+    if not x_service_key or x_service_key != SERVICE_API_KEY:
+        raise HTTPException(status_code=403, detail="Invalid service key")
+
+    trust_doc = await db.get(f"trust:{body.reportedUserId}")
+    if not trust_doc:
+        raise HTTPException(status_code=404, detail="Trust state not found")
+
+    tier2b = trust_doc.setdefault("tier2b", {})
+    tier2b["riskHold"] = True
+    tier2b["riskReason"] = f"Reported: {body.reason} (Msg: {body.messageId})"
+    
+    await db.put(f"trust:{body.reportedUserId}", trust_doc)
+
+    return {"ok": True, "reportedUserId": body.reportedUserId, "status": "flagged"}

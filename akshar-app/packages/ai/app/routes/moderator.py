@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from app.config import SERVICE_API_KEY
 from app.db.couch_client import db
 from app.services.trust_engine import trust_from_evidence, tier_for
+from app.services import style_detector
 
 router = APIRouter(prefix="/ai", tags=["moderator"])
 
@@ -41,13 +42,21 @@ async def get_dashboard(x_service_key: str | None = Header(None)):
         else:
             users_by_tier["larva"] = users_by_tier.get("larva", 0) + 1
 
-        if trust < 1000:
+        tier2b = doc.get("tier2b", {})
+        risk_hold = tier2b.get("riskHold", False)
+        risk_reason = tier2b.get("riskReason", "")
+        
+        if trust < 1000 or risk_hold:
+            # If trust is low or they have a manual risk hold (e.g. from upheld reports)
             flagged_accounts.append({
                 "userId": doc.get("userId"),
                 "trust": trust,
                 "tier": tier,
+                "riskHold": risk_hold,
+                "riskReason": risk_reason,
             })
-            bot_count += 1
+            if trust < 1000:
+                bot_count += 1
         else:
             human_count += 1
 
@@ -62,6 +71,11 @@ async def get_dashboard(x_service_key: str | None = Header(None)):
         "flaggedConversations": flagged_convos,
         "botCount": bot_count,
         "humanCount": human_count,
+        "aiDiagnostics": {
+            "svmLoaded": style_detector._classifier is not None,
+            "embeddingModelLoaded": style_detector.is_loaded(),
+            "modelName": "all-MiniLM-L6-v2" # fallback if not exposed
+        }
     }
 
 

@@ -18,6 +18,7 @@ import { relayRouter } from './routes/relay.js';
 import { groupsRouter } from './routes/groups.js';
 import { feedRouter } from './routes/feed.js';
 import { healthRouter } from './routes/health.js';
+import { reportRouter } from './routes/report.js';
 import { registerHandlers } from './socket/handlers.js';
 import * as anomaly from './services/anomaly.js';
 
@@ -50,6 +51,7 @@ app.use(relayRouter);
 app.use(groupsRouter);
 app.use(feedRouter);
 app.use(healthRouter);
+app.use(reportRouter);
 app.use(errorHandler);
 
 // --- Socket.IO auth + handlers ---

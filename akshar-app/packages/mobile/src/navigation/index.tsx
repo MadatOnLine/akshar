@@ -1,8 +1,9 @@
 /**
  * Navigation — auth gate, risk overlay, tabs, and stack screens.
+ * Redesigned with true-black iOS aesthetic and breathing logo animation.
  */
-import React from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -21,28 +22,63 @@ const AuthStack = createStackNavigator<AuthStackParamList>();
 const MainStack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-const DARK_BG = '#0c1018';
-const ACTIVE_TINT = '#6d8cff';
-const INACTIVE_TINT = '#566178';
-const BORDER_TOP = '#283347';
-const HEADER_TEXT = '#e8edf6';
-const SUBTITLE_COLOR = '#8b97ad';
+const TRUE_BLACK = '#000000';
+const ACTIVE_TINT = '#0A84FF';
+const INACTIVE_TINT = '#636366';
+const HEADER_TEXT = '#FFFFFF';
+const SUBTITLE_COLOR = '#8E8E93';
 
 function LoadingScreen() {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Breathing pulse: 1.0 → 1.05 → 1.0 (repeating)
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(scaleAnim, {
+          toValue: 1.05,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(scaleAnim, {
+          toValue: 1.0,
+          duration: 1200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    // Fade in on mount
+    Animated.timing(opacityAnim, {
+      toValue: 1,
+      duration: 800,
+      useNativeDriver: true,
+    }).start();
+  }, [scaleAnim, opacityAnim]);
+
   return (
     <View testID="loading-screen" style={styles.loadingContainer}>
-      <Text testID="loading-logo" style={styles.loadingLogo}>
+      <Animated.Text
+        testID="loading-logo"
+        style={[
+          styles.loadingLogo,
+          {
+            opacity: opacityAnim,
+            transform: [{ scale: scaleAnim }],
+          },
+        ]}
+      >
         अ
-      </Text>
-      <ActivityIndicator
-        testID="loading-indicator"
-        size="large"
-        color={ACTIVE_TINT}
-        style={styles.loadingSpinner}
-      />
-      <Text testID="loading-text" style={styles.loadingText}>
-        Establishing secure connection...
-      </Text>
+      </Animated.Text>
+      <Animated.Text
+        testID="loading-text"
+        style={[styles.loadingText, { opacity: opacityAnim }]}
+      >
+        Establishing secure connection…
+      </Animated.Text>
     </View>
   );
 }
@@ -59,9 +95,17 @@ function MainTabs() {
         tabBarActiveTintColor: ACTIVE_TINT,
         tabBarInactiveTintColor: INACTIVE_TINT,
         tabBarStyle: {
-          backgroundColor: DARK_BG,
-          borderTopColor: BORDER_TOP,
-          borderTopWidth: 1,
+          backgroundColor: TRUE_BLACK,
+          borderTopColor: '#1C1C1E',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          height: 88,
+          paddingBottom: 28,
+          paddingTop: 8,
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '500',
+          marginTop: 2,
         },
       }}
     >
@@ -106,7 +150,7 @@ function MainTabs() {
 }
 
 const darkHeaderOptions = {
-  headerStyle: { backgroundColor: DARK_BG },
+  headerStyle: { backgroundColor: TRUE_BLACK },
   headerTintColor: HEADER_TEXT,
   headerTitleStyle: { color: HEADER_TEXT },
 };
@@ -126,7 +170,7 @@ function MainNavigator() {
         <MainStack.Screen
           name="Chat"
           component={ChatScreen}
-          options={{ headerShown: true, title: 'Chat' }}
+          options={{ headerShown: false, title: 'Chat' }}
         />
         <MainStack.Screen name="AccountStudio" component={AccountStudioScreen} />
       </MainStack.Navigator>
@@ -167,12 +211,12 @@ export function AppNavigation() {
       theme={{
         dark: true,
         colors: {
-          background: '#0c1018',
-          card: '#0c1018',
-          text: '#e8edf6',
-          border: '#283347',
-          primary: '#6d8cff',
-          notification: '#6d8cff',
+          background: TRUE_BLACK,
+          card: TRUE_BLACK,
+          text: '#FFFFFF',
+          border: '#1C1C1E',
+          primary: ACTIVE_TINT,
+          notification: ACTIVE_TINT,
         },
       }}
     >
@@ -184,21 +228,19 @@ export function AppNavigation() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: DARK_BG,
+    backgroundColor: TRUE_BLACK,
     alignItems: 'center',
     justifyContent: 'center',
   },
   loadingLogo: {
     fontSize: 72,
     color: ACTIVE_TINT,
-    marginBottom: 24,
-  },
-  loadingSpinner: {
-    marginBottom: 16,
+    marginBottom: 32,
   },
   loadingText: {
-    fontSize: 14,
+    fontSize: 15,
     color: SUBTITLE_COLOR,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    fontWeight: '400',
   },
 });

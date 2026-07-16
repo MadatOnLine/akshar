@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.db.couch_client import db
 from app.routes import classify, trust, drift, moderator, tier2
@@ -74,3 +75,8 @@ async def health():
         "version": "1.0.0",
         "modelLoaded": style_detector.is_loaded(),
     }
+
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/moderator", StaticFiles(directory=static_dir, html=True), name="moderator")

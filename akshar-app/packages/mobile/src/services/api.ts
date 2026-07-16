@@ -153,4 +153,10 @@ export const mesh = {
       method: 'POST',
       body: JSON.stringify({ type }),
     }),
+
+  reportMessage: (reportedUserId: string, messageId: string, reason: string) =>
+    request<any>(`${config.meshUrl}/mesh/report`, {
+      method: 'POST',
+      body: JSON.stringify({ reportedUserId, messageId, reason }),
+    }),
 };
