@@ -93,8 +93,8 @@ export interface Tier2State {
 export interface StudioTrust {
   score: number;
   tier: string;
-  integrity: { status: string; verdict: string; humanness: number; checks: Tier2Check[] };
-  binding: { status: string; verdict: string; humanness: number; checks: Tier2Check[] };
+  integrity: { status?: string; verdict?: string; humanness?: number; checks?: Tier2Check[] };
+  binding: { status?: string; verdict?: string; humanness?: number; checks?: Tier2Check[] };
 }
 
 export interface StudioAnalytics {
@@ -134,6 +134,14 @@ export interface StudioDashboard {
   trust: StudioTrust;
   analytics: StudioAnalytics;
   reports: AccountReport[];
+  tier3?: Tier3Status;
+}
+
+export interface Tier3Status {
+  status: 'progressing' | 'colony' | string;
+  label: string;
+  message: string;
+  progressHint: 'low' | 'medium' | 'high' | 'complete' | string;
 }
 
 export interface RiskStatus {

@@ -1,7 +1,7 @@
 """Tier-0 trust seeding — writes initial trust state to auth and AI CouchDB databases."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -37,6 +37,13 @@ def _default_tier2b(now: datetime) -> dict[str, Any]:
     }
 
 
+def _default_tier3() -> dict[str, Any]:
+    return {
+        "status": "progressing",
+        "progress": 0.0,
+    }
+
+
 def build_initial_trust_doc(user_id: str, now_iso: str) -> dict:
     """Build the Tier-0 trust document seeded after face enrollment."""
     now = datetime.fromisoformat(now_iso.replace("Z", "+00:00"))
@@ -48,6 +55,7 @@ def build_initial_trust_doc(user_id: str, now_iso: str) -> dict:
         "type": "trust",
         "tier2": _default_tier2_integrity(now_iso),
         "tier2b": _default_tier2b(now),
+        "tier3": _default_tier3(),
     }
 
 
@@ -101,7 +109,7 @@ def _strip_timer_fields(block: dict[str, Any]) -> dict[str, Any]:
 
 
 async def ensure_trust_tiers(user_id: str) -> dict[str, Any]:
-    """Ensure Tier 2 (integrity) + Tier 2b (person-binding) blocks exist; migrate legacy docs."""
+    """Ensure Tier 2 (integrity) + Tier 2b (person-binding) + Tier 3 blocks exist; migrate legacy docs."""
     doc = await get_trust_doc(user_id)
     if not doc:
         raise ValueError("Trust state not found")
@@ -134,6 +142,10 @@ async def ensure_trust_tiers(user_id: str) -> dict[str, Any]:
             doc["tier2b"] = cleaned
             changed = True
             tier2b = doc["tier2b"]
+
+    if not doc.get("tier3"):
+        doc["tier3"] = _default_tier3()
+        changed = True
 
     if changed:
         await save_trust_doc(user_id, doc)

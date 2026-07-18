@@ -75,23 +75,13 @@
     <h1>Account Studio</h1>
     <p class="sub">Your trust snapshot, post analytics, and moderation reports — no trust history is shown here.</p>
 
-    <div class="card">
-      <h2>Trust score</h2>
-      <div id="trust-tier" class="badge">—</div>
-      <div class="trust-big" id="trust-score">—</div>
-      <div class="bar"><div id="trust-bar" style="width:0%"></div></div>
-      <p style="font-size:13px;color:#8b97ad;margin-top:8px;" id="binding-summary">—</p>
-    </div>
-
-    <div class="grid">
-      <div class="card">
-        <h2>Account integrity</h2>
-        <div id="integrity-checks"></div>
-      </div>
-      <div class="card">
-        <h2>Person binding</h2>
-        <div id="binding-checks"></div>
-      </div>
+    <div class="card" id="tier3-card">
+      <h2>Proof of Human — final tier</h2>
+      <div id="tier3-badge" class="badge warn">Building verification</div>
+      <div class="bar" style="margin-top:12px;"><div id="tier3-bar" style="width:18%"></div></div>
+      <p style="font-size:13px;color:#8b97ad;margin-top:10px;line-height:1.5;" id="tier3-message">
+        Verification builds quietly while you use Akshar — no extra steps required.
+      </p>
     </div>
 
     <div class="card">
@@ -110,6 +100,14 @@
       <h2>Reports against your account</h2>
       <p style="font-size:13px;color:#8b97ad;margin-bottom:12px;">If a report is upheld, you can submit an appeal. Each appeal is reviewed against the report details and your explanation.</p>
       <div id="reports-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Trust score</h2>
+      <div id="trust-tier" class="badge">—</div>
+      <div class="trust-big" id="trust-score">—</div>
+      <div class="bar"><div id="trust-bar" style="width:0%"></div></div>
+      <p style="font-size:13px;color:#8b97ad;margin-top:8px;" id="binding-summary">—</p>
     </div>
   </div>
 
@@ -229,12 +227,11 @@
       }
     }
 
-    function renderChecks(elId, checks) {
-      document.getElementById(elId).innerHTML = (checks || []).map(c => `
-        <div class="check">
-          <span>${c.label}<br><small style="color:#667">${c.detail||''}</small></span>
-          <span class="${c.pass?'pass':'fail'}">${c.pass?'OK':'—'} ${Math.round((c.score||0)*100)}%</span>
-        </div>`).join('');
+    function tier3BarWidth(hint) {
+      if (hint === 'complete') return '100%';
+      if (hint === 'high') return '78%';
+      if (hint === 'medium') return '48%';
+      return '18%';
     }
 
     function renderStudio(data) {
@@ -247,8 +244,14 @@
       tierEl.className = 'badge' + ((t.binding?.status === 'at_risk' || data.requiresRiskCheck) ? ' bad' : '');
       document.getElementById('binding-summary').textContent =
         (t.integrity?.verdict || '—') + ' · ' + (t.binding?.verdict || '—');
-      renderChecks('integrity-checks', t.integrity?.checks);
-      renderChecks('binding-checks', t.binding?.checks);
+
+      const t3 = data.tier3 || {};
+      const badge = document.getElementById('tier3-badge');
+      badge.textContent = t3.label || 'Building verification';
+      badge.className = 'badge' + (t3.status === 'colony' ? '' : ' warn');
+      document.getElementById('tier3-bar').style.width = tier3BarWidth(t3.progressHint);
+      document.getElementById('tier3-message').textContent =
+        t3.message || 'Verification builds quietly while you use Akshar — no extra steps required.';
 
       const a = data.analytics?.totals || {};
       document.getElementById('analytics-stats').innerHTML = [

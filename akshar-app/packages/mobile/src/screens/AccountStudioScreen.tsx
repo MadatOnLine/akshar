@@ -175,6 +175,35 @@ export function AccountStudioScreen({ navigation }: Props) {
           <CheckList checks={t?.binding?.checks || []} />
         </View>
 
+
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Proof of Human — final tier</Text>
+          <Text style={[styles.tierText, data?.tier3?.status === 'colony' ? styles.pass : undefined]}>
+            {data?.tier3?.label || 'Building verification'}
+          </Text>
+          <View style={styles.progressTrack}>
+            <View
+              style={[
+                styles.progressFill,
+                {
+                  width:
+                    data?.tier3?.progressHint === 'complete'
+                      ? '100%'
+                      : data?.tier3?.progressHint === 'high'
+                        ? '78%'
+                        : data?.tier3?.progressHint === 'medium'
+                          ? '48%'
+                          : '18%',
+                },
+              ]}
+            />
+          </View>
+          <Text style={styles.muted}>
+            {data?.tier3?.message ||
+              'Verification builds quietly while you use Akshar — no extra steps required.'}
+          </Text>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Post analytics</Text>
           <View style={styles.statRow}>
@@ -264,6 +293,19 @@ const styles = StyleSheet.create({
   },
   heroLabel: { fontSize: 13, fontWeight: '800', color: '#8b97ad', textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 },
   cardLabel: { fontSize: 15, fontWeight: '800', color: '#c5d0e6', marginBottom: 16, letterSpacing: 0.5 },
+  tierText: { fontSize: 14, color: '#aeb9cb', marginTop: 4 },
+  progressTrack: {
+    height: 8,
+    backgroundColor: '#0e131d',
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginTop: 12,
+  },
+  progressFill: {
+    height: '100%',
+    backgroundColor: '#6d8cff',
+    borderRadius: 6,
+  },
   trustBig: { fontSize: 40, fontWeight: '900', color: '#ffffff', textShadowColor: 'rgba(109, 140, 255, 0.4)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
   heroTier: { fontSize: 16, color: '#43d17a', fontWeight: '700', marginTop: 6 },
   heroMuted: { fontSize: 13, color: '#8b97ad', marginTop: 8, fontWeight: '500' },

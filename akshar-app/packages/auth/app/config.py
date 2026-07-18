@@ -59,6 +59,16 @@ TIER2_REAUTH_INTERVAL_SEC: int = int(os.getenv("TIER2_REAUTH_INTERVAL_SEC", "120
 TIER2_FACE_MATCH_THRESHOLD: int = int(os.getenv("TIER2_FACE_MATCH_THRESHOLD", "14"))
 TIER2_BOOST_HUMANNESS: float = float(os.getenv("TIER2_BOOST_HUMANNESS", "0.85"))
 TIER2_OVERDUE_HUMANNESS: float = float(os.getenv("TIER2_OVERDUE_HUMANNESS", "0.15"))
+
+# --- Tier-3 (passive Colony / final PoH) — thresholds stay server-side only ---
+# Likely Human remains at trust >= 4000 (tier_for). Tier 3 requires higher trust.
+# No minimum account-age wait — unlock when trust/integrity/other gates pass.
+TIER3_TRUST_MIN: int = int(os.getenv("TIER3_TRUST_MIN", "8000"))
+TIER3_AGE_DAYS_MIN: float = float(os.getenv("TIER3_AGE_DAYS_MIN", "0"))
+TIER3_INTEGRITY_MIN: float = float(os.getenv("TIER3_INTEGRITY_MIN", "0.55"))
+TIER3_ACTIVITY_VOLUME_MIN: float = float(os.getenv("TIER3_ACTIVITY_VOLUME_MIN", "5"))
+TIER3_MAX_VALID_REPORTS: int = int(os.getenv("TIER3_MAX_VALID_REPORTS", "2"))
+
 AI_SERVICE_URL: str = os.getenv("AI_SERVICE_URL", "http://127.0.0.1:8002")
 SERVICE_API_KEY: str = os.getenv("SERVICE_API_KEY", "akshar-internal-dev-key")
 

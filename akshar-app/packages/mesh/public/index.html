@@ -210,9 +210,11 @@
           <p style="font-size:13px; color:#666; margin-bottom:8px;" id="tier2-summary">—</p>
           <h3 style="font-size:15px; margin:12px 0 8px;">Tier 2b — Person binding</h3>
           <p style="font-size:13px; color:#666; margin-bottom:8px;" id="tier2b-summary">—</p>
-          <a href="/account-studio.html" style="color:#6200EE; font-size:14px; font-weight:600;">Open Account Studio →</a>
+          <h3 style="font-size:15px; margin:12px 0 8px;">Tier 3 — Final proof of human</h3>
+          <p style="font-size:13px; color:#666; margin-bottom:8px;" id="tier3-summary">Building verification</p>
         </div>
-        <button class="btn btn-danger" onclick="logout()" style="margin-top:32px;" data-testid="profile-logout-button">Logout</button>
+        <a href="/account-studio.html" class="btn" id="open-studio-btn" style="display:inline-block; margin-top:20px; text-decoration:none; text-align:center;">Open Account Studio →</a>
+        <button class="btn btn-danger" onclick="logout()" style="margin-top:16px;" data-testid="profile-logout-button">Logout</button>
       </div>
     </div>
   </div>
@@ -841,11 +843,16 @@
           const tier2Data = await tier2Resp.json();
           const t2 = tier2Data.tier2 || {};
           const t2b = tier2Data.tier2b || {};
+          const t3 = tier2Data.tier3 || {};
           document.getElementById('profile-tier2').style.display = 'block';
           document.getElementById('tier2-summary').textContent =
-            `${t2.verdict || t2.status || '—'} · integrity ${Math.round((t2.humanness || 0) * 100)}%`;
+            `${t2.verdict || t2.status || '—'}`;
           document.getElementById('tier2b-summary').textContent =
             `${t2b.verdict || t2b.status || '—'}${tier2Data.tier2b?.requiresRiskCheck ? ' · verification required' : ''}`;
+          document.getElementById('tier3-summary').textContent =
+            t3.label
+              ? `${t3.label}${t3.message ? ' — ' + t3.message : ''}`
+              : (t3.status === 'colony' ? 'Fully verified' : 'Building verification');
           if (tier2Data.tier2b?.requiresRiskCheck) {
             showRiskModal(tier2Data.tier2b.riskReason || tier2Data.riskReason);
           }

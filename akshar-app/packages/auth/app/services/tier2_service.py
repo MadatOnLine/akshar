@@ -29,7 +29,14 @@ async def get_risk_status(user_id: str) -> dict:
 
 async def get_trust_status(user_id: str) -> dict:
     trust_doc = await trust_store.ensure_trust_tiers(user_id)
-    return await build_trust_status_response(user_id, trust_doc)
+    status = await build_trust_status_response(user_id, trust_doc)
+    from app.services import tier3_service
+
+    tier3 = await tier3_service.evaluate_and_persist(
+        user_id, await trust_store.get_trust_doc(user_id) or trust_doc
+    )
+    status["tier3"] = tier3
+    return status
 
 
 async def refresh_integrity(user_id: str) -> dict:
@@ -37,7 +44,12 @@ async def refresh_integrity(user_id: str) -> dict:
     result = await apply_integrity_process(user_id, trust_doc)
     trust_doc = await trust_store.get_trust_doc(user_id) or trust_doc
     risk_state = await risk_service.evaluate_risk_for_user(user_id, trust_doc)
-    return {"ok": True, **result, **risk_state}
+    from app.services import tier3_service
+
+    tier3 = await tier3_service.evaluate_and_persist(
+        user_id, await trust_store.get_trust_doc(user_id) or trust_doc
+    )
+    return {"ok": True, **result, **risk_state, "tier3": tier3}
 
 
 async def touch_tier2b_on_login(

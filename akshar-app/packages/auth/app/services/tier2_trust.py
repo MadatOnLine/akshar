@@ -129,6 +129,9 @@ async def build_trust_status_response(user_id: str, trust_doc: dict[str, Any]) -
                 trust_doc, trust_score=score, qualifying_reports=qualifying
             ) if needs_risk else "",
         },
+        "tier3": {
+            "status": (trust_doc.get("tier3") or {}).get("status", "progressing"),
+        },
     }
 
 

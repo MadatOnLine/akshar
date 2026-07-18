@@ -5,15 +5,13 @@ from typing import Any
 
 from app.config import COUCHDB_FEED_DB, TIER0_BASE_TRUST
 from app.db.couch_query import find_docs
-from app.services import reports_service, risk_service, trust_store
+from app.services import reports_service, risk_service, tier3_service, trust_store
 from app.services.tier2_trust import (
     build_trust_status_response,
     evidence_for_trust,
     tier_for,
     trust_from_evidence,
 )
-
-
 
 
 async def get_post_analytics(user_id: str) -> dict[str, Any]:
@@ -62,10 +60,15 @@ async def get_studio_dashboard(user_id: str) -> dict[str, Any]:
     trust_doc = await trust_store.get_trust_doc(user_id) or trust_doc
 
     status = await build_trust_status_response(user_id, trust_doc)
+    tier3 = await tier3_service.evaluate_and_persist(
+        user_id, await trust_store.get_trust_doc(user_id) or trust_doc
+    )
     reports = await reports_service.list_reports_for_user(user_id)
     analytics = await get_post_analytics(user_id)
 
-    evidence = trust_doc.get("evidence", evidence_for_trust(TIER0_BASE_TRUST))
+    evidence = (await trust_store.get_trust_doc(user_id) or trust_doc).get(
+        "evidence", evidence_for_trust(TIER0_BASE_TRUST)
+    )
     trust_score = trust_from_evidence(evidence)
     tier2 = status.get("tier2", {})
     tier2b = status.get("tier2b", {})
@@ -91,6 +94,7 @@ async def get_studio_dashboard(user_id: str) -> dict[str, Any]:
                 "checks": tier2b.get("checks", []),
             },
         },
+        "tier3": tier3,
         "analytics": analytics,
         "reports": reports,
     }
