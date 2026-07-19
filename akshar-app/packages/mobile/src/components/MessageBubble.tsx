@@ -130,13 +130,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 22,
     color: '#FFFFFF',
-    letterSpacing: 0.2,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 3,
+    gap: 6,
+    marginTop: 4,
   },
   time: {
     fontSize: 10,
@@ -164,13 +163,12 @@ const styles = StyleSheet.create({
   },
   shareButton: {
     marginLeft: 4,
-    padding: 8,
-    minWidth: 44,
-    minHeight: 44,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
   shareIcon: {
-    fontSize: 16,
+    fontSize: 14,
   },
 });

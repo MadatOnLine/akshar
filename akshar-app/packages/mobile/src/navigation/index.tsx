@@ -24,7 +24,7 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 
 const TRUE_BLACK = '#000000';
 const ACTIVE_TINT = '#0A84FF';
-const INACTIVE_TINT = '#636366';
+const INACTIVE_TINT = '#8E8E93';
 const HEADER_TEXT = '#FFFFFF';
 const SUBTITLE_COLOR = '#8E8E93';
 

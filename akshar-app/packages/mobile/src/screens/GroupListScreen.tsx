@@ -196,7 +196,7 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
           <TextInput
             style={styles.searchInput}
             placeholder="Search"
-            placeholderTextColor="#636366"
+            placeholderTextColor="#8E8E93"
             value={searchQuery}
             onChangeText={setSearchQuery}
           />

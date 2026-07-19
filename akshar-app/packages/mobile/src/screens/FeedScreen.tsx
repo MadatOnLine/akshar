@@ -44,6 +44,9 @@ export function FeedScreen() {
   useFocusEffect(
     useCallback(() => {
       loadFeed();
+      return () => {
+        reactedRef.current.clear();
+      };
     }, [loadFeed])
   );
 
