@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Animated,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { mesh } from '../services/api';
@@ -48,6 +49,7 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const animatedValues = useRef<Animated.Value[]>([]).current;
 
   const loadGroups = useCallback(async () => {
@@ -187,16 +189,22 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
         <Text style={styles.headerTitle}>Messages</Text>
       </View>
 
-      {/* Search bar (visual only) */}
+      {/* Search bar */}
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Text style={styles.searchIcon}>🔍</Text>
-          <Text style={styles.searchPlaceholder}>Search</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search"
+            placeholderTextColor="#636366"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
         </View>
       </View>
 
       <FlatList
-        data={groups}
+        data={groups.filter(g => g.name.toLowerCase().includes(searchQuery.toLowerCase()))}
         keyExtractor={item => item.groupId}
         renderItem={renderItem}
         ListEmptyComponent={renderEmpty}
@@ -261,13 +269,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   searchIcon: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-  searchPlaceholder: {
     fontSize: 16,
-    color: '#636366',
-    fontWeight: '400',
+    marginRight: 8,
+    opacity: 0.7,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#FFFFFF',
+    height: '100%',
   },
 
   /* ── List ────────────────────────────────────────────── */

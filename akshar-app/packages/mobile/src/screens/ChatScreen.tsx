@@ -431,7 +431,7 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
             value={inputText}
             onChangeText={handleTextChange}
             placeholder="Message"
-            placeholderTextColor="#636366"
+            placeholderTextColor="#8E8E93"
             maxLength={5000}
             editable={keysReady}
             multiline
@@ -488,8 +488,6 @@ const styles = StyleSheet.create({
     padding: 10,
     paddingBottom: Platform.OS === 'ios' ? 14 : 10,
     backgroundColor: '#000000',
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: '#1C1C1E',
     alignItems: 'flex-end',
   },
   input: {
@@ -502,19 +500,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     maxHeight: 100,
     color: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#2C2C2E',
   },
   sendButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#0A84FF',
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
-    marginBottom: 1,
+    marginBottom: 0,
   },
-  sendDisabled: { backgroundColor: '#1C1C1E' },
+  sendDisabled: { backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: '#2C2C2E' },
   sendText: { color: '#FFF', fontSize: 18, fontWeight: '700' },
-  sendTextDisabled: { color: '#48484A' },
+  sendTextDisabled: { color: '#636366' },
   typingIndicator: { color: '#8E8E93', fontSize: 13, fontStyle: 'italic', paddingHorizontal: 16, paddingVertical: 6 },
 });

@@ -54,7 +54,7 @@ export function ModeratorScreen() {
       >
         <View style={styles.header}>
           <View style={styles.headerIconContainer}>
-            <Image source={require('../../assets/logo.png')} style={styles.headerLogo} />
+            <Image source={require('../../assets/logo.jpg')} style={styles.headerLogo} />
           </View>
           <Text style={styles.title}>Moderator Node</Text>
           <Text style={styles.subtitle}>AI Threat & Trust Intelligence</Text>
@@ -231,18 +231,20 @@ const styles = StyleSheet.create({
   },
   headerIconContainer: {
     marginBottom: 16,
-    borderRadius: 24,
+    borderRadius: 30,
+    backgroundColor: '#FFFFFF',
+    padding: 2,
     shadowColor: '#00E5FF',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.5,
     shadowRadius: 20,
     elevation: 8,
   },
   headerLogo: {
-    width: 60,
-    height: 60,
+    width: 56,
+    height: 56,
     resizeMode: 'contain',
-    borderRadius: 15,
+    borderRadius: 28,
   },
   title: {
     fontSize: 28,
