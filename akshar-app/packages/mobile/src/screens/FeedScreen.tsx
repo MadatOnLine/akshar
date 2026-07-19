@@ -183,17 +183,8 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
 
-  /* Card wrapper — gives each card breathing room + rounded corners */
-  cardWrapper: {
-    backgroundColor: '#1C1C1E',
-    borderRadius: 16,
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
-  },
+  /* Card wrapper — no longer needs styles as FeedPostCard is self-contained */
+  cardWrapper: {},
 
   itemSeparator: {
     height: 14,

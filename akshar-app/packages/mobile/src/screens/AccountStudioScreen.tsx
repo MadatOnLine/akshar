@@ -148,7 +148,7 @@ export function AccountStudioScreen({ navigation }: Props) {
 
         <View style={styles.headerContainer}>
           <View style={styles.headerTitleRow}>
-            <Image source={require('../../assets/logo.png')} style={styles.headerLogo} />
+            <Image source={require('../../assets/logo.jpg')} style={styles.headerLogo} />
             <View>
               <Text style={styles.title}>Account Studio</Text>
               <Text style={styles.sub}>Trust snapshot, analytics, and reports</Text>
@@ -176,33 +176,41 @@ export function AccountStudioScreen({ navigation }: Props) {
         </View>
 
 
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>Proof of Human — final tier</Text>
-          <Text style={[styles.tierText, data?.tier3?.status === 'colony' ? styles.pass : undefined]}>
-            {data?.tier3?.label || 'Building verification'}
-          </Text>
-          <View style={styles.progressTrack}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width:
-                    data?.tier3?.progressHint === 'complete'
-                      ? '100%'
-                      : data?.tier3?.progressHint === 'high'
+        {data?.tier3?.progressHint === 'complete' ? (
+          <View style={[styles.card, { backgroundColor: 'rgba(109, 140, 255, 0.15)', borderColor: '#6d8cff', alignItems: 'center', paddingVertical: 32 }]}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>🛡️</Text>
+            <Text style={{ fontSize: 20, fontWeight: '900', color: '#ffffff', letterSpacing: 0.5, marginBottom: 8 }}>Tier 3: Fully Verified</Text>
+            <Text style={{ fontSize: 14, color: '#c5d0e6', textAlign: 'center', lineHeight: 20, paddingHorizontal: 16 }}>
+              {data?.tier3?.message || 'Your account has graduated to the Parity Swarm. You are recognized as a verified human.'}
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Proof of Human — final tier</Text>
+            <Text style={[styles.tierText, data?.tier3?.status === 'colony' ? styles.pass : undefined]}>
+              {data?.tier3?.label || 'Building verification'}
+            </Text>
+            <View style={styles.progressTrack}>
+              <View
+                style={[
+                  styles.progressFill,
+                  {
+                    width:
+                      data?.tier3?.progressHint === 'high'
                         ? '78%'
                         : data?.tier3?.progressHint === 'medium'
                           ? '48%'
                           : '18%',
-                },
-              ]}
-            />
+                  },
+                ]}
+              />
+            </View>
+            <Text style={styles.muted}>
+              {data?.tier3?.message ||
+                'Verification builds quietly while you use Akshar — no extra steps required.'}
+            </Text>
           </View>
-          <Text style={styles.muted}>
-            {data?.tier3?.message ||
-              'Verification builds quietly while you use Akshar — no extra steps required.'}
-          </Text>
-        </View>
+        )}
 
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Post analytics</Text>

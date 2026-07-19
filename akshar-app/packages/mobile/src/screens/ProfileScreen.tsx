@@ -106,9 +106,9 @@ export function ProfileScreen() {
 
         {/* ── Avatar section ─────────────────────────────── */}
         <View style={styles.avatarSection}>
-          <View style={[styles.avatarRing, { borderColor: tierColor }]}>
+          <View style={[styles.avatarRing, { borderColor: tierColor, shadowColor: tierColor }]}>
             <View style={styles.avatar}>
-              <Image source={require('../../assets/logo.png')} style={styles.logoImage} />
+              <Image source={require('../../assets/logo.jpg')} style={styles.logoImage} />
             </View>
           </View>
           <Text style={styles.name} testID="profile-name">{profile.name}</Text>
@@ -266,27 +266,31 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   avatarRing: {
-    width: 118,
-    height: 118,
-    borderRadius: 59,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     borderWidth: 3,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 14,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
   },
   avatar: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: '#1C1C1E',
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
   },
   logoImage: {
-    width: 110,
-    height: 110,
-    resizeMode: 'cover',
+    width: 90,
+    height: 90,
+    resizeMode: 'contain',
   },
   name: {
     fontSize: 26,

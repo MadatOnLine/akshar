@@ -134,7 +134,7 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
         }}
       >
         <TouchableOpacity
-          style={styles.groupRow}
+          style={styles.groupCard}
           onPress={() => navigateToChat(item)}
           activeOpacity={0.6}
           testID={`group-item-${item.groupId}`}
@@ -151,16 +151,13 @@ export function GroupListScreen({ navigation }: GroupListScreenProps) {
               {item.name}
             </Text>
             <Text style={styles.groupSubtitle} numberOfLines={1}>
-              {item.memberIds.length} member{item.memberIds.length !== 1 ? 's' : ''} · End-to-end encrypted
+              {item.memberIds.length} member{item.memberIds.length !== 1 ? 's' : ''} · E2E encrypted
             </Text>
           </View>
 
           {/* Chevron */}
           <Text style={styles.chevron}>›</Text>
         </TouchableOpacity>
-
-        {/* Separator — inset like iOS */}
-        <View style={styles.separator} />
       </Animated.View>
     );
   };
@@ -281,24 +278,33 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
 
-  /* ── Group row (iOS-style) ──────────────────────────── */
-  groupRow: {
+  /* ── Group Card (Bento-style) ──────────────────────────── */
+  groupCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    backgroundColor: '#1C1C1E',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
   },
   avatarText: {
-    fontSize: 22,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
     color: '#FFFFFF',
   },
   groupInfo: {
@@ -307,25 +313,20 @@ const styles = StyleSheet.create({
   },
   groupName: {
     fontSize: 17,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 3,
+    marginBottom: 4,
   },
   groupSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8E8E93',
-    fontWeight: '400',
+    fontWeight: '500',
   },
   chevron: {
-    fontSize: 22,
+    fontSize: 20,
     color: '#48484A',
-    fontWeight: '300',
+    fontWeight: '400',
     marginLeft: 8,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#38383A',
-    marginLeft: 86, // Inset past avatar
   },
 
   /* ── Empty state ────────────────────────────────────── */

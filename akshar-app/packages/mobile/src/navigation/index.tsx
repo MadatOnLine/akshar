@@ -61,18 +61,20 @@ function LoadingScreen() {
 
   return (
     <View testID="loading-screen" style={styles.loadingContainer}>
-      <Animated.Text
+      <Animated.Image
         testID="loading-logo"
+        source={require('../../assets/logo.jpg')}
         style={[
           styles.loadingLogo,
           {
             opacity: opacityAnim,
             transform: [{ scale: scaleAnim }],
+            width: 140,
+            height: 140,
+            resizeMode: 'contain',
           },
         ]}
-      >
-        अ
-      </Animated.Text>
+      />
       <Animated.Text
         testID="loading-text"
         style={[styles.loadingText, { opacity: opacityAnim }]}
@@ -228,7 +230,7 @@ export function AppNavigation() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: TRUE_BLACK,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -238,9 +240,10 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   loadingText: {
-    fontSize: 15,
-    color: SUBTITLE_COLOR,
-    letterSpacing: 0.3,
-    fontWeight: '400',
+    fontSize: 14,
+    color: '#8E8E93',
+    letterSpacing: 0.5,
+    fontWeight: '500',
+    marginTop: 24,
   },
 });
