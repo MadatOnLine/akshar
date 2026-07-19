@@ -36,3 +36,10 @@ akshar-app/.demo-run/
 akshar-app/*-test-output.txt
 akshar-app/packages/*/.venv-*/
 akshar-app/packages/mobile/android/.gradle/
+
+# TrueP2PMessenger source (tracked as docs-only in remote)
+research/TrueP2PMessenger/*.js
+research/TrueP2PMessenger/package*.json
+research/TrueP2PMessenger/public/
+research/TrueP2PMessenger/.gitignore
+research/TrueP2PMessenger/node-*.db
