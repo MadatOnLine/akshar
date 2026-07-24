@@ -32,6 +32,9 @@ export function registerHandlers(io: SocketServer, socket: Socket): void {
     // Send backlog
     const backlog = await messaging.getBacklog(groupId);
     socket.emit('backlog', { groupId, messages: backlog });
+    
+    // Notify others that a user joined (so they can exchange keys)
+    socket.broadcast.to(`group:${groupId}`).emit('user-joined', { userId });
   });
 
   // --- Send Encrypted Message ---

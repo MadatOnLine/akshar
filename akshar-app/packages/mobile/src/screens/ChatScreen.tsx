@@ -127,13 +127,19 @@ export function ChatScreen({ route, navigation }: ChatScreenProps) {
         try {
           const sharedSecret = deriveSharedKey(myKeyPairRef.current.privateKey, data.publicKey);
           peerKeysRef.current.set(data.userId, sharedSecret);
-          if (!sharedKeyRef.current) {
-            sharedKeyRef.current = sharedSecret;
-            setKeysReady(true);
-          }
+          // Always override the mock testing key if a real peer key comes in
+          sharedKeyRef.current = sharedSecret;
+          setKeysReady(true);
         } catch (err) {
           console.error('Failed to derive shared key:', err);
         }
+      }
+    });
+
+    newSocket.on('user-joined', (data: { userId: string }) => {
+      // When a new user joins, re-publish our public key so they can derive a shared secret
+      if (data.userId !== userId) {
+        newSocket.emit('publish-key', { publicKey: myKeyPairRef.current.publicKey });
       }
     });
 
